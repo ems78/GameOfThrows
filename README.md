@@ -40,21 +40,17 @@ cd GameOfThrows
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
-3. Install dependencies
+4. **Install dependencies**
 ```
 pip install -r requirements.txt
 ```
 
-4. Start Neo4j database
-
-5. Configure the database connection in `config.py`
-
-6. Run the data processing pipeline
+5. **Import dataset**
 ```
-python src/main.py
+python import_chess_data.py
 ```
 
-3. **Access Neo4j Browser**
+6. **Access Neo4j Browser**
    Open your web browser and navigate to http://localhost:7474/
    - Username: neo4j
    - Password: gameofthrows
@@ -75,4 +71,4 @@ python src/main.py
 ```
 
 ## Data
-This project uses chess game data from Lichess.org. You can download the dataset from Kaggle or use your own PGN files. 
+This project uses chess game data from Lichess.org. [You can download the dataset from Kaggle](https://www.kaggle.com/datasets/datasnaek/chess) or use your own PGN files. 
