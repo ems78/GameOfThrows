@@ -11,11 +11,15 @@ DATA = {
     "sample_size": 1000  # Number of games to process (set to None for all games)
 }
 
+# Stockfish Configuration
+STOCKFISH = {
+    "path": "/opt/homebrew/bin/stockfish",  # Path to Stockfish executable (update with your own path)
+    "analysis_depth": 15     # Depth for Stockfish analysis
+}
+
 # Blunder Detection Configuration
 BLUNDER = {
     "evaluation_threshold": 200,  # Centipawn threshold for detecting blunders
-    "stockfish_path": None,  # Path to Stockfish executable (optional)
-    "analysis_depth": 15     # Depth for Stockfish analysis
 }
 
 # Analysis Configuration

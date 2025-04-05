@@ -19,38 +19,44 @@ This project analyzes chess game data to discover patterns in how players make m
 - Docker
 - Python 3.8+
 - Neo4j Database
-- Stockfish chess engine (optional, for more accurate blunder detection)
+- Stockfish chess engine
 
 ### Installation
 
-1. Clone the repository
+1. **Clone the repository**
 ```
-git clone <repository-url>
+git clone https://github.com/ems78/GameOfThrows.git
 cd GameOfThrows
 ```
 
-2. **Start Neo4j using Docker**
-   ```
-   docker run --name neo4j-gameofthrows -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/gameofthrows -d neo4j:latest
-   ```
+2. **Update configuration if needed**
 
-3. **Create and activate Python virtual environment**
-   ```
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+   Located in `src/config.py`
 
-4. **Install dependencies**
+3. **Start Neo4j using Docker**
+ ```
+docker run --name neo4j-gameofthrows -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/gameofthrows -d neo4j:latest
+```
+
+4. **Create and activate Python virtual environment**
+```
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+5. **Install dependencies**
 ```
 pip install -r requirements.txt
+brew install stockfish
 ```
 
-5. **Import dataset**
+6. **Import dataset**
 ```
 python import_chess_data.py
 ```
 
-6. **Access Neo4j Browser**
+7. **Access Neo4j Browser**
+
    Open your web browser and navigate to http://localhost:7474/
    - Username: neo4j
    - Password: gameofthrows
@@ -62,7 +68,6 @@ python import_chess_data.py
 │   ├── main.py            # Main entry point
 │   ├── config.py          # Configuration settings
 │   ├── modules/
-│       ├── data_processing/     # Data import and processing
 │       ├── blunder_detection/   # Chess blunder detection algorithms
 │       ├── database/            # Neo4j database interaction
 │       ├── analysis/            # Network analysis algorithms
