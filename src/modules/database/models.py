@@ -71,7 +71,7 @@ class GraphModels:
             'ply': ply
             })
     
-    def create_blunder(self, id, move_number, move_notation, position_fen, eval, eval_change, severity=None):
+    def create_blunder(self, id, move_number, move_notation, position_fen, eval, eval_change, is_mate, severity=None):
         query = """
         MERGE (b:Blunder {id: $id})
         ON CREATE SET 
@@ -80,6 +80,7 @@ class GraphModels:
             b.position_fen = $position_fen,
             b.eval = $eval,
             b.eval_change = $eval_change,
+            b.is_mate = $is_mate,
             b.severity = $severity
         RETURN b
         """
@@ -90,6 +91,7 @@ class GraphModels:
             'position_fen': position_fen,
             'eval': eval,
             'eval_change': eval_change,
+            'is_mate': is_mate,
             'severity': severity
         })
 

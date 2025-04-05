@@ -3,10 +3,53 @@ import math
 import io
 import chess
 import chess.pgn
+from chess.engine import SimpleEngine
+from src.config import STOCKFISH
 
 class BlunderDetection:
-    @staticmethod
-    def get_stockfish_evaluation(fen):
+    def __init__(self):
+        self.engine = SimpleEngine.popen_uci(STOCKFISH["path"])
+
+    def close(self):
+        """Close the engine process when done"""
+        if self.engine:
+            self.engine.close()
+            
+    def __del__(self):
+        """Destructor to ensure engine is closed"""
+        self.close()
+
+    def get_stockfish_evaluation_local(self, fen, depth=STOCKFISH["analysis_depth"]):
+        board = chess.Board(fen)
+        info = self.engine.analyse(board, chess.engine.Limit(depth=depth))
+        
+        score = info["score"].relative
+
+        bestmove = None
+        if "pv" in info and info["pv"]:
+            bestmove = info["pv"][0].uci()
+            
+        if score.is_mate():
+            # This scales mates so that mate in 1 is worth more than mate in 10
+            mate_value = 10.0 + 10.0/max(1, abs(score.mate()))
+            if score.mate() < 0:
+                mate_value = -mate_value
+            
+            return {
+                "eval": mate_value,
+                "mate_in": abs(score.mate()),
+                "is_mate": True,
+                "bestmove": bestmove
+            }
+        else:
+            return {
+                "eval": score.score() / 100.0, # Convert to pawns
+                "mate_in": None,
+                "is_mate": False,
+                "bestmove": bestmove
+            }
+
+    def get_stockfish_evaluation(self, fen):
         """Get position evaluation from Stockfish online API"""
         base_url = "https://stockfish.online/api/s/v2.php"
         params = {
@@ -38,26 +81,41 @@ class BlunderDetection:
             print(f"Data parsing error: {e}")
             return None
 
-    @staticmethod
-    def eval_to_win_probability(eval_score):
+    def eval_to_win_probability(self, eval_score):
         """Convert engine evaluation to win probability (0-1)"""
         if eval_score is None:
             return 0.5
-        
-        # Handle mate scores
-        if isinstance(eval_score, str) and 'mate' in eval_score:
-            mate_in = int(eval_score.split('mate')[1].strip())
-            return 1.0 if mate_in > 0 else 0.0
-        
-        # Convert centipawns to win probability using sigmoid function
-        # Similar to what chess.com uses
+
         win_probability = 1 / (1 + math.exp(-0.00368208 * eval_score * 100))
         return win_probability
 
-    @staticmethod
-    def classify_move(current_eval, previous_eval):
-        current_win_prob = BlunderDetection.eval_to_win_probability(current_eval)
-        previous_win_prob = BlunderDetection.eval_to_win_probability(previous_eval)
+    def classify_move(self, current_eval, previous_eval, current_is_mate=False, previous_is_mate=False):
+        """
+        Classify a move based on evaluation change
+        Args:
+            current_eval: Current position evaluation (after move)
+            previous_eval: Previous position evaluation (before move)
+            current_is_mate: Whether current position is a mate
+            previous_is_mate: Whether previous position was a mate
+        """
+        # Special handling for transitions to/from mate positions
+        if current_is_mate and not previous_is_mate:
+            # If we went from non-mate to mate in our favor, it's a great move
+            if current_eval > 0:  # Mate in our favor
+                return "Best"
+            else:  # Mate against us - serious blunder
+                return "Blunder"
+                
+        elif previous_is_mate and not current_is_mate:
+            # If we went from mate in our favor to non-mate, it's a blunder
+            if previous_eval > 0:  # Was mate in our favor
+                return "Blunder"
+            else:  # Was mate against us, now it's not - good save
+                return "Best"
+        
+        # Regular evaluation change based classification
+        current_win_prob = self.eval_to_win_probability(current_eval)
+        previous_win_prob = self.eval_to_win_probability(previous_eval)
         win_prob_change = previous_win_prob - current_win_prob
         
         # Chess.com classification
@@ -74,8 +132,7 @@ class BlunderDetection:
         else:  # win_prob_change > 0.20
             return "Blunder"
 
-    @staticmethod
-    def convert_moves_to_positions(moves_string):
+    def convert_moves_to_positions(self, moves_string):
         """Convert a string of moves to a list of FEN positions after each move"""
         board = chess.Board()
         moves_list = moves_string.split()
@@ -100,10 +157,9 @@ class BlunderDetection:
         
         return positions
 
-    @staticmethod
-    def process_game_for_analysis(game_moves):
+    def process_game_for_analysis(self, game_moves):
         """Process a game's moves and prepare positions for Stockfish analysis"""
-        positions = BlunderDetection.convert_moves_to_positions(game_moves)
+        positions = self.convert_moves_to_positions(game_moves)
         
         # For each position, get the evaluation
         results = []
@@ -123,38 +179,33 @@ class BlunderDetection:
         
         return results
 
-    @staticmethod
-    def analyze_game_for_blunders(game_moves):
+    def analyze_game_for_blunders(self, game_moves):
         """Analyze a game's moves and identify blunders"""
-        positions = BlunderDetection.process_game_for_analysis(game_moves)
+        positions = self.process_game_for_analysis(game_moves)
         
         previous_eval = 0
         
         for i, position in enumerate(positions):
-            eval_data = BlunderDetection.get_stockfish_evaluation(position["fen"])
+            eval_data = self.get_stockfish_evaluation_local(position["fen"])
 
             if not eval_data:
                 print(f"ERROR: No eval data for position {position['fen']}")
-                return {"error": "No eval data for position"}
+                return None
 
             current_eval = eval_data["eval"]
-            if eval_data["mate_in"] is not None:
-                try:
-                    mate_in = int(eval_data["mate_in"])
-                    current_eval = 100 if mate_in > 0 else -100
-                except (ValueError, TypeError):
-                    print(f"Warning: Could not convert mate value '{eval_data['mate_in']}' to integer.")
-                    current_eval = 0
 
             if position["player"] == "Black":
                 current_eval = -current_eval
-             
+
             position["eval"] = current_eval
-            position["bestmove"] = eval_data["bestmove"]
+            position["bestmove"] = eval_data.get("bestmove")
+            position["is_mate"] = eval_data.get("is_mate", False)
 
             if i > 0:
                 eval_change = previous_eval - current_eval
-                move_class = BlunderDetection.classify_move(current_eval, previous_eval)
+                current_is_mate = position.get("is_mate", False)
+                previous_is_mate = positions[i-1].get("is_mate", False) if i > 0 else False
+                move_class = self.classify_move(current_eval, previous_eval, current_is_mate, previous_is_mate)
                 
                 position["eval_change"] = eval_change
                 position["move_class"] = move_class

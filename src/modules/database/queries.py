@@ -36,122 +36,129 @@ def import_data_to_neo4j(batch_size=1000, max_games=None):
     """
     db = Neo4jConnection()
     models = GraphModels()
+    blunder_detection = BlunderDetection()
     
-    # Download and load data
-    df = load_chess_data()
-    
-    # Limit number of games if specified
-    if max_games and max_games < len(df):
-        df = df.iloc[:max_games]
-    
-    print(f"Importing {len(df)} games to Neo4j...")
-    
-    # Process in batches
-    for i in range(0, len(df), batch_size):
-        batch = df.iloc[i:i+batch_size]
-        print(f"Processing batch {i//batch_size + 1}/{(len(df)-1)//batch_size + 1}")
+    try:
+        # Download and load data
+        df = load_chess_data()
         
-        for _, game in batch.iterrows():
-            game_id = game['id']
+        # Limit number of games if specified
+        if max_games and max_games < len(df):
+            df = df.iloc[:max_games]
+        
+        print(f"Importing {len(df)} games to Neo4j...")
+        
+        # Process in batches
+        for i in range(0, len(df), batch_size):
+            batch = df.iloc[i:i+batch_size]
+            print(f"Processing batch {i//batch_size + 1}/{(len(df)-1)//batch_size + 1}")
+            
+            for _, game in batch.iterrows():
+                game_id = game['id']
 
-            # if game id in database, skip
-            if models.find_game_by_id(game_id):
-                continue
+                # if game id in database, skip
+                if models.find_game_by_id(game_id):
+                    continue
 
-            date = pd.to_datetime(game['created_at']/1000, unit='s', origin='unix')
-            time_control = game['increment_code']
-            result = f"{game['winner']} won by {game['victory_status']}" if game['winner'] != '' else "draw"
-            eco_code = game['opening_eco']
-            pgn = game['moves']
-            blunder_data = BlunderDetection.analyze_game_for_blunders(pgn)
+                date = pd.to_datetime(game['created_at']/1000, unit='s', origin='unix')
+                time_control = game['increment_code']
+                result = f"{game['winner']} won by {game['victory_status']}" if game['winner'] != '' else "draw"
+                eco_code = game['opening_eco']
+                pgn = game['moves']
+                blunder_data = blunder_detection.analyze_game_for_blunders(pgn)
 
-            # If there is an error, stop the import
-            if blunder_data.get("error"):
-                print(f"Error analyzing game {game_id}: {blunder_data['error']}")
-                return
+                # If None, stop import
+                if blunder_data is None:
+                    print(f"Error analyzing game {game_id}")
+                    break
 
-            # Create game
-            models.create_game(
-                id=game_id,
-                date=date,
-                time_control=time_control,
-                result=result,
-                pgn=pgn,
-                eco_code=eco_code
-            )
-            
-            # Create opening
-            models.create_opening(
-                eco_code=game['opening_eco'],
-                name=game['opening_name'],
-                ply=game['opening_ply']
-            )
-            
-            # Connect game to opening
-            models.connect_game_to_opening(
-                game_id=game_id,
-                opening_eco=game['opening_eco']
-            )
-            
-            # Create players
-            white_player_id = game['white_id']
-            black_player_id = game['black_id']
-            
-            models.create_player(
-                id=white_player_id, 
-                username=white_player_id,  # player id is username
-                rating=game['white_rating']
-            )
-            
-            models.create_player(
-                id=black_player_id,
-                username=black_player_id,  # player id is username
-                rating=game['black_rating']
-            )
-            
-            # Connect players to game
-            models.connect_player_to_game(
-                player_id=white_player_id,
-                game_id=game_id,
-                color="white",
-                rating_at_game=game['white_rating']
-            )
-            
-            models.connect_player_to_game(
-                player_id=black_player_id,
-                game_id=game_id,
-                color="black",
-                rating_at_game=game['black_rating']
-            )
+                # Create game
+                models.create_game(
+                    id=game_id,
+                    date=date,
+                    time_control=time_control,
+                    result=result,
+                    pgn=pgn,
+                    eco_code=eco_code
+                )
+                
+                # Create opening
+                models.create_opening(
+                    eco_code=game['opening_eco'],
+                    name=game['opening_name'],
+                    ply=game['opening_ply']
+                )
+                
+                # Connect game to opening
+                models.connect_game_to_opening(
+                    game_id=game_id,
+                    opening_eco=game['opening_eco']
+                )
+                
+                # Create players
+                white_player_id = game['white_id']
+                black_player_id = game['black_id']
+                
+                models.create_player(
+                    id=white_player_id, 
+                    username=white_player_id,  # player id is username
+                    rating=game['white_rating']
+                )
+                
+                models.create_player(
+                    id=black_player_id,
+                    username=black_player_id,  # player id is username
+                    rating=game['black_rating']
+                )
+                
+                # Connect players to game
+                models.connect_player_to_game(
+                    player_id=white_player_id,
+                    game_id=game_id,
+                    color="white",
+                    rating_at_game=game['white_rating']
+                )
+                
+                models.connect_player_to_game(
+                    player_id=black_player_id,
+                    game_id=game_id,
+                    color="black",
+                    rating_at_game=game['black_rating']
+                )
 
-            for blunder in blunder_data:
-                if blunder['move_class'] == 'Blunder':
-                    blunder_id = str(uuid.uuid4()) # Convert UUID to string for Neo4j
-                    
-                    # Create blunder
-                    models.create_blunder(
-                        id=blunder_id,
-                        move_number=blunder['move_number'],
-                        move_notation=blunder['move_notation'],
-                        position_fen=blunder['fen'],
-                        eval=blunder['eval'],
-                        eval_change=blunder['eval_change'],
-                        severity='high' if abs(blunder['eval_change']) > 2 else 'medium'
-                    )
-                    
-                    # Connect blunder to game
-                    models.connect_blunder_to_game(
-                        blunder_id=blunder_id,
-                        game_id=game_id
-                    )
-                    
-                    # Connect player to blunder
-                    player_id = white_player_id if blunder['player'] == 'White' else black_player_id
-                    models.connect_player_to_blunder(
-                        player_id=player_id,
-                        blunder_id=blunder_id,
-                        timestamp=date
-                    )
-            
-    print("Data import complete!")
+                for blunder in blunder_data:
+                    if blunder['move_class'] == 'Blunder':
+                        blunder_id = str(uuid.uuid4()) # Convert UUID to string for Neo4j
+                        
+                        # Create blunder
+                        models.create_blunder(
+                            id=blunder_id,
+                            move_number=blunder['move_number'],
+                            move_notation=blunder['move_notation'],
+                            position_fen=blunder['fen'],
+                            eval=blunder['eval'],
+                            eval_change=blunder['eval_change'],
+                            is_mate=blunder['is_mate'],
+                            severity='high' if abs(blunder['eval_change']) > 2 or blunder['is_mate'] 
+                                            else 'medium' if abs(blunder['eval_change']) > 1 
+                                            else 'low'
+                        )
+                        
+                        # Connect blunder to game
+                        models.connect_blunder_to_game(
+                            blunder_id=blunder_id,
+                            game_id=game_id
+                        )
+                        
+                        # Connect player to blunder
+                        player_id = white_player_id if blunder['player'] == 'White' else black_player_id
+                        models.connect_player_to_blunder(
+                            player_id=player_id,
+                            blunder_id=blunder_id,
+                            timestamp=date
+                        )
+                
+        print("Data import complete!")
+    finally:
+        blunder_detection.close()
 
