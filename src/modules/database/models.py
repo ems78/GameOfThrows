@@ -3,6 +3,14 @@ from .db_manager import Neo4jConnection
 class GraphModels:
     def __init__(self):
         self.db = Neo4jConnection()
+
+    #  For testing imports
+    def delete_all_data(self):
+        query = """
+        MATCH (n)
+        DETACH DELETE n
+        """
+        return self.db.query(query)
     
     def create_player(self, id, username, rating, country=None, account_creation_date=None):
         query = """
@@ -42,6 +50,12 @@ class GraphModels:
             'eco_code': eco_code
         })
 
+    def find_game_by_id(self, id):
+        query = """
+        MATCH (g:Game {id: $id})
+        RETURN g
+        """
+        return self.db.query(query, {'id': id})
 
     def create_opening(self, eco_code, name, ply):
         query = """
@@ -57,15 +71,15 @@ class GraphModels:
             'ply': ply
             })
     
-    def create_blunder(self, id, move_number, move_notation, position_fen, eval_before, eval_after, severity):
+    def create_blunder(self, id, move_number, move_notation, position_fen, eval, eval_change, severity=None):
         query = """
         MERGE (b:Blunder {id: $id})
         ON CREATE SET 
             b.move_number = $move_number,
             b.move_notation = $move_notation,
             b.position_fen = $position_fen,
-            b.eval_before = $eval_before,
-            b.eval_after = $eval_after,
+            b.eval = $eval,
+            b.eval_change = $eval_change,
             b.severity = $severity
         RETURN b
         """
@@ -74,10 +88,18 @@ class GraphModels:
             'move_number': move_number,
             'move_notation': move_notation,
             'position_fen': position_fen,
-            'eval_before': eval_before,
-            'eval_after': eval_after,
+            'eval': eval,
+            'eval_change': eval_change,
             'severity': severity
         })
+
+    def connect_blunder_to_game(self, blunder_id, game_id):
+        query = """
+        MATCH (b:Blunder {id: $blunder_id})
+        MATCH (g:Game {id: $game_id})
+        MERGE (b)-[:IN]->(g)
+        """
+        return self.db.query(query, {'blunder_id': blunder_id, 'game_id': game_id})
     
     def connect_player_to_game(self, player_id, game_id, color, rating_at_game):
         query = """
