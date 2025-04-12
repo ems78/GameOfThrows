@@ -13,11 +13,14 @@ time.sleep(5)
 if __name__ == "__main__":
     print("Starting chess data import...")
     
-    # Import a small batch for testing (adjust as needed)
-    delete_all_data()
-    import_data_to_neo4j(batch_size=2, max_games=10)
-    
-    # To import all data, use:
-    # import_data_to_neo4j()
-    
-    print("Import process completed.") 
+    try:
+        # Import a small batch for testing (adjust as needed)
+        # delete_all_data()
+        print("Calling import_data_to_neo4j...")
+        import_data_to_neo4j(batch_size=100, max_games=1000) # this will take some time because of Stockfish analysis
+        print("Import process completed.")
+    except Exception as e:
+        print(f"Error during import: {str(e)}")
+        import traceback
+        traceback.print_exc()
+

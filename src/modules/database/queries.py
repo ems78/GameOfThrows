@@ -5,6 +5,7 @@ from .models import GraphModels
 from ..blunder_detection.blunder_detection import BlunderDetection
 import datetime
 import uuid
+import sys
 
 def download_chess_dataset():
     """Download chess dataset from Kaggle"""
@@ -34,6 +35,7 @@ def import_data_to_neo4j(batch_size=1000, max_games=None):
         batch_size: Number of games to process in each batch
         max_games: Maximum number of games to import (None for all)
     """
+    print("Initializing database connection and models...")
     db = Neo4jConnection()
     models = GraphModels()
     blunder_detection = BlunderDetection()
@@ -46,18 +48,26 @@ def import_data_to_neo4j(batch_size=1000, max_games=None):
         if max_games and max_games < len(df):
             df = df.iloc[:max_games]
         
-        print(f"Importing {len(df)} games to Neo4j...")
+        total_games = len(df)
+        total_batches = (total_games - 1) // batch_size + 1
+        print(f"Starting import of {total_games} games in {total_batches} batches...")
         
         # Process in batches
         for i in range(0, len(df), batch_size):
             batch = df.iloc[i:i+batch_size]
-            print(f"Processing batch {i//batch_size + 1}/{(len(df)-1)//batch_size + 1}")
+            batch_num = i//batch_size + 1
+            print(f"\nProcessing batch {batch_num}/{total_batches} ({len(batch)} games)")
+            print("Importing games: ", end="", flush=True)
+            
+            games_processed = 0
+            blunders_found = 0
             
             for _, game in batch.iterrows():
                 game_id = game['id']
 
                 # if game id in database, skip
                 if models.find_game_by_id(game_id):
+                    print(".", end="", flush=True)
                     continue
 
                 date = pd.to_datetime(game['created_at']/1000, unit='s', origin='unix')
@@ -69,7 +79,7 @@ def import_data_to_neo4j(batch_size=1000, max_games=None):
 
                 # If None, stop import
                 if blunder_data is None:
-                    print(f"Error analyzing game {game_id}")
+                    print("\nError analyzing game", game_id)
                     break
 
                 # Create game
@@ -126,8 +136,10 @@ def import_data_to_neo4j(batch_size=1000, max_games=None):
                     rating_at_game=game['black_rating']
                 )
 
+                game_blunders = 0
                 for blunder in blunder_data:
                     if blunder['move_class'] == 'Blunder':
+                        game_blunders += 1
                         blunder_id = str(uuid.uuid4()) # Convert UUID to string for Neo4j
                         
                         # Create blunder
@@ -135,6 +147,7 @@ def import_data_to_neo4j(batch_size=1000, max_games=None):
                             id=blunder_id,
                             move_number=blunder['move_number'],
                             move_notation=blunder['move_notation'],
+                            best_move=blunder['bestmove'],
                             position_fen=blunder['fen'],
                             eval=blunder['eval'],
                             eval_change=blunder['eval_change'],
@@ -158,7 +171,17 @@ def import_data_to_neo4j(batch_size=1000, max_games=None):
                             timestamp=date
                         )
                 
-        print("Data import complete!")
+                games_processed += 1
+                blunders_found += game_blunders
+                print(".", end="", flush=True)
+                
+                # Print a newline every 50 games for better readability
+                if games_processed % 50 == 0:
+                    print()
+                    print(f"  {games_processed}/{len(batch)} games processed", end="", flush=True)
+            
+            print(f"\nBatch {batch_num} complete: {games_processed} games processed, {blunders_found} blunders found")
     finally:
         blunder_detection.close()
+        db.close()
 
