@@ -144,4 +144,86 @@ class GraphModels:
             'timestamp': timestamp
         })
     
+    def create_weighted_blunder_graph(self):
+        """
+        Creates a weighted graph analysis that combines player ratings with blunder evaluation changes.
+        This method:
+        1. Creates a weighted relationship between players based on their blunders
+        2. The weight is calculated as a normalized combination of:
+           - The player's rating (normalized to 0-1 range)
+           - The absolute evaluation change of the blunder (normalized to 0-1 range)
+        3. Returns the graph data for further analysis
+        """
+        # First, create a temporary graph with weighted relationships
+        query = """
+        // Find all players who made blunders
+        MATCH (p1:Player)-[:MADE_BLUNDER]->(b:Blunder)
+        
+        // Calculate player's average blunder severity
+        WITH p1, avg(abs(toFloat(b.eval_change))) as avg_eval_change1, max(abs(toFloat(b.eval_change))) as max_eval_change1
+        
+        // Find other players who made blunders
+        MATCH (p2:Player)-[:MADE_BLUNDER]->(b2:Blunder)
+        WHERE p1 <> p2
+        
+        // Calculate second player's average blunder severity
+        WITH p1, p2, avg_eval_change1, max_eval_change1, 
+             avg(abs(toFloat(b2.eval_change))) as avg_eval_change2, 
+             max(abs(toFloat(b2.eval_change))) as max_eval_change2
+        
+        // Calculate normalized weights
+        WITH p1, p2,
+             // Normalize player ratings (assuming typical range 1000-3000)
+             (toFloat(p1.rating) - 1000) / 2000 as norm_rating1,
+             (toFloat(p2.rating) - 1000) / 2000 as norm_rating2,
+             // Normalize evaluation changes
+             CASE WHEN max_eval_change1 > 0 
+                  THEN avg_eval_change1 / max_eval_change1 
+                  ELSE 0 END as norm_eval_change1,
+             CASE WHEN max_eval_change2 > 0 
+                  THEN avg_eval_change2 / max_eval_change2 
+                  ELSE 0 END as norm_eval_change2,
+             avg_eval_change1,
+             avg_eval_change2
+        
+        // Create weighted relationship between players
+        MERGE (p1)-[r:BLUNDER_SIMILARITY {
+            weight: (norm_rating1 + norm_rating2) / 2 * (1 - (norm_eval_change1 + norm_eval_change2) / 2),
+            rating_diff: abs(toFloat(p1.rating) - toFloat(p2.rating)),
+            avg_eval_change1: avg_eval_change1,
+            avg_eval_change2: avg_eval_change2
+        }]->(p2)
+        
+        RETURN p1.id as player1_id, p2.id as player2_id, 
+               p1.username as player1_username, p2.username as player2_username,
+               p1.rating as player1_rating, p2.rating as player2_rating,
+               r.weight as weight, r.rating_diff as rating_diff, 
+               r.avg_eval_change1 as avg_eval_change1, r.avg_eval_change2 as avg_eval_change2
+        ORDER BY r.weight DESC
+        LIMIT 100
+        """
+        return self.db.query(query)
+    
+    def get_player_blunder_stats(self):
+        """
+        Returns statistics about player blunders including:
+        - Average evaluation change
+        - Maximum evaluation change
+        - Number of blunders
+        - Rating at time of blunders
+        """
+        query = """
+        MATCH (p:Player)-[r:MADE_BLUNDER]->(b:Blunder)
+        WITH p, b
+        RETURN 
+            p.username,
+            p.rating,
+            count(b) as blunder_count,
+            avg(abs(toFloat(b.eval_change))) as avg_eval_change,
+            max(abs(toFloat(b.eval_change))) as max_eval_change,
+            min(abs(toFloat(b.eval_change))) as min_eval_change
+        ORDER BY avg_eval_change DESC
+        """
+        return self.db.query(query)
+    
     # TODO: Add other entity and relationship methods

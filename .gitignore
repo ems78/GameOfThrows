@@ -73,3 +73,4 @@ wheels/
 data/
 *.csv
 *.pgn 
+output/

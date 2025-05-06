@@ -75,5 +75,43 @@ python import_chess_data.py
 └── tests/                 # Unit tests
 ```
 
+## Usage
+
+Run the main script to generate visualization
+```bash
+# Generate all visualization with default settings
+python main.py
+
+# Show visualizations on screen instead of saving them
+python main.py --show
+
+# Generate only player network visualization with higher minimum edge weight
+python main.py --visualization player --min-edge-weight 3
+
+# Generate high-resolution opening blunder chart with more openings
+python main.py --visualization opening --top-openings 15 --dpi 600
+
+# Generate community visualization with larger minimum community size
+python main.py --visualization community --min-community-size 5
+```
+
+## Command Line Options
+
+- `--output-dir`: Directory to save visualizations (default: output)
+- `--min-edge-weight`: Minimum edge weight for player blunder graph (default: 2)
+- `--min-community-size`: Minimum size of communities to visualize (default: 3)
+- `--top-openings`: Number of top openings to show (default: 10)
+- `--dpi`: DPI for saved images (default: 300)
+- `--show`: Show visualizations instead of saving them
+- `--visualization`: Which visualizations to generate (choices: player, community, opening, all)
+
+## Output
+
+Visualizations are saved as PNG files in the specified output directory:
+
+- `player_blunder_network.png`: Network of players connected by similar blunders
+- `blunder_communities.png`: Communities of players with similar blunder patterns
+- `opening_blunders.png`: Bar chart of openings with most blunders
+
 ## Data
 This project uses chess game data from Lichess.org. [You can download the dataset from Kaggle](https://www.kaggle.com/datasets/datasnaek/chess) or use your own PGN files. 
