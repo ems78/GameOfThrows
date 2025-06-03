@@ -5,6 +5,10 @@ import time
 from src.modules.database.import_data import import_data_to_neo4j, delete_all_data
 from src.modules.database.queries import GraphQueries
 from src.modules.visualization.network_visualization import NetworkVisualization
+from src.modules.visualization.player_analysis_visualization import PlayerAnalysisVisualization
+from src.modules.visualization.temporal_analysis_visualization import TemporalAnalysisVisualization
+from src.modules.visualization.player_performance_visualization import PlayerPerformanceVisualization
+from src.modules.analysis.player_network_analysis import PlayerNetworkAnalysis
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Chess Network Analysis Tool')
@@ -34,11 +38,43 @@ def parse_args():
     
     # Visualization types
     parser.add_argument('-v', '--visualizations', type=str, nargs='+', 
-                        default=['temporal', 'opening', 'player', 'community'],
-                        choices=['temporal', 'opening', 'player', 'community', 'all'],
+                        default=['temporal', 'opening', 'player', 'community', 'performance'],
+                        choices=['temporal', 'opening', 'player', 'community', 'performance', 'all'],
                         help='Which visualizations to generate (default: all)')
     
+    # Player Network Analysis arguments
+    parser.add_argument('--analyze-player', type=str,
+                        help='Analyze a specific player\'s rating progression')
+    parser.add_argument('--analyze-rating-progression', action='store_true',
+                        help='Analyze rating progression by opponent rating')
+    parser.add_argument('--analyze-network-position', action='store_true',
+                        help='Analyze network position vs win rate')
+    parser.add_argument('--analyze-time-controls', action='store_true',
+                        help='Analyze impact of time controls on game dynamics')
+    parser.add_argument('--analyze-opening-trends', action='store_true',
+                        help='Analyze trends in opening usage and success rates')
+    parser.add_argument('--output-format', type=str, default='json',
+                        choices=['json', 'csv'],
+                        help='Output format for analysis results (default: json)')
+    parser.add_argument('--visualize-analysis', action='store_true',
+                        help='Generate visualizations for the analysis results')
+    
     return parser.parse_args()
+
+def save_analysis_results(results, filename, output_format):
+    """Save analysis results in the specified format."""
+    if output_format == 'json':
+        import json
+        with open(filename, 'w') as f:
+            json.dump(results, f, indent=2)
+    elif output_format == 'csv':
+        import pandas as pd
+        if isinstance(results, dict) and 'raw_data' in results:
+            df = pd.DataFrame(results['raw_data'])
+            df.to_csv(filename, index=False)
+        else:
+            df = pd.DataFrame([results])
+            df.to_csv(filename, index=False)
 
 def main():
     args = parse_args()
@@ -66,21 +102,129 @@ def main():
     
     # Initialize analysis components
     queries = GraphQueries()
-    visualizer = NetworkVisualization()
+    network_visualizer = NetworkVisualization()
+    player_analyzer = PlayerNetworkAnalysis()
+    player_visualizer = PlayerAnalysisVisualization()
+    temporal_visualizer = TemporalAnalysisVisualization()
+    performance_visualizer = PlayerPerformanceVisualization()
     
+    # Run player network analysis if requested
+    if args.analyze_player:
+        print(f"Analyzing rating progression for player: {args.analyze_player}")
+        try:
+            results = player_analyzer.predict_rating_progression(args.analyze_player)
+            output_file = f'{args.output_dir}/player_analysis_{args.analyze_player}.{args.output_format}'
+            save_analysis_results(results, output_file, args.output_format)
+            print(f"Analysis results saved to {output_file}")
+            
+            if args.visualize_analysis:
+                print("Generating visualization...")
+                fig = player_visualizer.visualize_player_prediction(results)
+                if args.show:
+                    player_visualizer.show_visualization(fig)
+                else:
+                    player_visualizer.save_visualization(
+                        fig, 
+                        f'{args.output_dir}/player_prediction_{args.analyze_player}.png',
+                        dpi=args.dpi
+                    )
+        except Exception as e:
+            print(f"Error analyzing player: {str(e)}")
+    
+    if args.analyze_rating_progression:
+        print("Analyzing rating progression by opponent rating...")
+        try:
+            results = player_analyzer.analyze_rating_progression_by_opponent_rating()
+            output_file = f'{args.output_dir}/rating_progression_analysis.{args.output_format}'
+            save_analysis_results(results, output_file, args.output_format)
+            print(f"Analysis results saved to {output_file}")
+            
+            if args.visualize_analysis:
+                print("Generating visualization...")
+                fig = performance_visualizer.visualize_rating_progression(results['raw_data'])
+                if args.show:
+                    performance_visualizer.show_visualization(fig)
+                else:
+                    performance_visualizer.save_visualization(
+                        fig,
+                        f'{args.output_dir}/rating_progression_analysis.png',
+                        dpi=args.dpi
+                    )
+        except Exception as e:
+            print(f"Error analyzing rating progression: {str(e)}")
+    
+    if args.analyze_network_position:
+        print("Analyzing network position vs win rate...")
+        try:
+            results = player_analyzer.analyze_network_position_vs_winrate()
+            output_file = f'{args.output_dir}/network_position_analysis.{args.output_format}'
+            save_analysis_results(results, output_file, args.output_format)
+            print(f"Analysis results saved to {output_file}")
+            
+            if args.visualize_analysis:
+                print("Generating visualization...")
+                fig = performance_visualizer.visualize_network_position_impact(results['raw_data'])
+                if args.show:
+                    performance_visualizer.show_visualization(fig)
+                else:
+                    performance_visualizer.save_visualization(
+                        fig,
+                        f'{args.output_dir}/network_position_analysis.png',
+                        dpi=args.dpi
+                    )
+        except Exception as e:
+            print(f"Error analyzing network position: {str(e)}")
+    
+    if args.analyze_time_controls:
+        print("Analyzing time control impact...")
+        try:
+            data = queries.get_time_control_metrics()
+            fig = temporal_visualizer.visualize_time_control_impact(data)
+            if args.show:
+                temporal_visualizer.show_visualization(fig)
+            else:
+                temporal_visualizer.save_visualization(
+                    fig,
+                    f'{args.output_dir}/time_control_analysis.png',
+                    dpi=args.dpi
+                )
+        except Exception as e:
+            print(f"Error analyzing time controls: {str(e)}")
+    
+    if args.analyze_opening_trends:
+        print("Analyzing opening trends...")
+        try:
+            data = queries.get_opening_trends(time_window=args.time_window)
+            fig = temporal_visualizer.visualize_opening_trends(data)
+            if args.show:
+                temporal_visualizer.show_visualization(fig)
+            else:
+                temporal_visualizer.save_visualization(
+                    fig,
+                    f'{args.output_dir}/opening_trends_analysis.png',
+                    dpi=args.dpi
+                )
+        except Exception as e:
+            print(f"Error analyzing opening trends: {str(e)}")
+    
+    # Generate visualizations
     vis_types = args.visualizations
     if 'all' in vis_types:
-        vis_types = ['temporal', 'opening', 'player', 'community']
+        vis_types = ['temporal', 'opening', 'player', 'community', 'performance']
     
     if 'temporal' in vis_types:
         print("Generating temporal network visualization...")
         try:
-            data = queries.get_temporal_network(time_window=args.time_window)
-            plt_obj = visualizer.visualize_temporal_network(data)
+            data = queries.get_temporal_network_evolution(time_window=args.time_window)
+            fig = temporal_visualizer.visualize_temporal_evolution(data, time_window=args.time_window)
             if args.show:
-                visualizer.show_visualization(plt_obj)
+                temporal_visualizer.show_visualization(fig)
             else:
-                visualizer.save_visualization(plt_obj, f'{args.output_dir}/temporal_network.png', dpi=args.dpi)
+                temporal_visualizer.save_visualization(
+                    fig,
+                    f'{args.output_dir}/temporal_network.png',
+                    dpi=args.dpi
+                )
         except Exception as e:
             print(f"Error generating temporal network: {str(e)}")
     
@@ -88,11 +232,15 @@ def main():
         print("Generating opening network visualization...")
         try:
             data = queries.get_opening_network()
-            plt_obj = visualizer.visualize_opening_network(data, top_n=args.top_openings)
+            fig = network_visualizer.visualize_opening_network(data, top_n=args.top_openings)
             if args.show:
-                visualizer.show_visualization(plt_obj)
+                network_visualizer.show_visualization(fig)
             else:
-                visualizer.save_visualization(plt_obj, f'{args.output_dir}/opening_network.png', dpi=args.dpi)
+                network_visualizer.save_visualization(
+                    fig,
+                    f'{args.output_dir}/opening_network.png',
+                    dpi=args.dpi
+                )
         except Exception as e:
             print(f"Error generating opening network: {str(e)}")
     
@@ -100,11 +248,15 @@ def main():
         print("Generating player network visualization...")
         try:
             data = queries.get_player_network_metrics()
-            plt_obj = visualizer.visualize_player_network(data)
+            fig = network_visualizer.visualize_player_network(data)
             if args.show:
-                visualizer.show_visualization(plt_obj)
+                network_visualizer.show_visualization(fig)
             else:
-                visualizer.save_visualization(plt_obj, f'{args.output_dir}/player_network.png', dpi=args.dpi)
+                network_visualizer.save_visualization(
+                    fig,
+                    f'{args.output_dir}/player_network.png',
+                    dpi=args.dpi
+                )
         except Exception as e:
             print(f"Error generating player network: {str(e)}")
     
@@ -112,13 +264,43 @@ def main():
         print("Generating community visualization...")
         try:
             data = queries.get_player_communities()
-            plt_obj = visualizer.visualize_communities(data)
+            fig = network_visualizer.visualize_communities(data)
             if args.show:
-                visualizer.show_visualization(plt_obj)
+                network_visualizer.show_visualization(fig)
             else:
-                visualizer.save_visualization(plt_obj, f'{args.output_dir}/player_communities.png', dpi=args.dpi)
+                network_visualizer.save_visualization(
+                    fig,
+                    f'{args.output_dir}/player_communities.png',
+                    dpi=args.dpi
+                )
         except Exception as e:
             print(f"Error generating community visualization: {str(e)}")
+    
+    if 'performance' in vis_types:
+        print("\n=== Generating Player Performance Visualization ===")
+        try:
+            print("Fetching player network metrics...")
+            data = queries.get_player_network_metrics()
+            print(f"Received {len(data)} records")
+            
+            print("\nCreating visualization...")
+            fig = performance_visualizer.visualize_player_development(data)
+            
+            if args.show:
+                print("\nShowing visualization...")
+                performance_visualizer.show_visualization(fig)
+            else:
+                print("\nSaving visualization...")
+                performance_visualizer.save_visualization(
+                    fig,
+                    f'{args.output_dir}/player_performance.png',
+                    dpi=args.dpi
+                )
+        except Exception as e:
+            print(f"\nError generating player performance visualization: {str(e)}")
+            print(f"Error type: {type(e)}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
     
     print("Analysis complete!")
 

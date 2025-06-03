@@ -67,8 +67,9 @@ def import_data_to_neo4j(batch_size=1000, max_games=None):
                     print(".", end="", flush=True)
                     continue
 
-                created_at = pd.to_datetime(game['created_at']/1000, unit='s', origin='unix')
-                last_move_at = pd.to_datetime(game['last_move_at']/1000, unit='s', origin='unix')
+                # Store timestamps as Unix timestamps (milliseconds)
+                created_at = int(game['created_at'])
+                last_move_at = int(game['last_move_at'])
 
                 # Create game
                 models.create_game(
