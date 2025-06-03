@@ -1,121 +1,126 @@
 #!/usr/bin/env python3
 import os
 import argparse
-from src.modules.visualization.network_visualization import BlunderNetworkVisualization
-from src.modules.analysis.blunder_graph_analysis import BlunderGraphAnalysis
+import time
+from src.modules.database.import_data import import_data_to_neo4j, delete_all_data
+from src.modules.database.queries import GraphQueries
+from src.modules.visualization.network_visualization import NetworkVisualization
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Generate chess blunder network visualizations')
+    parser = argparse.ArgumentParser(description='Chess Network Analysis Tool')
     
+    # Import arguments
+    parser.add_argument('--import-data', action='store_true',
+                        help='Import chess data to Neo4j')
+    parser.add_argument('--batch-size', type=int, default=1000,
+                        help='Number of games to process in each batch (default: 1000)')
+    parser.add_argument('--max-games', type=int, default=None,
+                        help='Maximum number of games to import (default: all)')
+    parser.add_argument('--delete-all', action='store_true',
+                        help='Delete all existing data before import')
+    
+    # Analysis arguments
     parser.add_argument('--output-dir', type=str, default='output',
                         help='Directory to save visualizations (default: output)')
-    
-    parser.add_argument('--min-edge-weight', type=int, default=2,
-                        help='Minimum edge weight for player blunder graph (default: 2)')
-    
-    parser.add_argument('--min-community-size', type=int, default=3,
-                        help='Minimum size of communities to visualize (default: 3)')
-    
+    parser.add_argument('--time-window', type=str, default='monthly',
+                        choices=['daily', 'weekly', 'monthly', 'yearly'],
+                        help='Time window for temporal analysis (default: monthly)')
     parser.add_argument('--top-openings', type=int, default=10,
                         help='Number of top openings to show (default: 10)')
-    
     parser.add_argument('--dpi', type=int, default=300,
                         help='DPI for saved images (default: 300)')
-    
     parser.add_argument('--show', action='store_true',
                         help='Show visualizations instead of saving them')
     
+    # Visualization types
     parser.add_argument('-v', '--visualizations', type=str, nargs='+', 
-                        default=['player', 'community', 'opening', 'weighted', 'rating'],
-                        choices=['player', 'community', 'opening', 'weighted', 'rating', 'all'],
+                        default=['temporal', 'opening', 'player', 'community'],
+                        choices=['temporal', 'opening', 'player', 'community', 'all'],
                         help='Which visualizations to generate (default: all)')
-    
-    parser.add_argument('--analyze', action='store_true',
-                        help='Run the weighted blunder graph analysis')
     
     return parser.parse_args()
 
 def main():
     args = parse_args()
     
+    if args.import_data:
+        print("Starting chess data import...")
+        if args.delete_all:
+            print("Deleting all existing data...")
+            delete_all_data()
+        
+        print("Waiting for Neo4j to start...")
+        time.sleep(5)  # Give Neo4j time to start
+        
+        try:
+            import_data_to_neo4j(batch_size=args.batch_size, max_games=args.max_games)
+            print("Import process completed.")
+        except Exception as e:
+            print(f"Error during import: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return
+    
     if not args.show:
         os.makedirs(args.output_dir, exist_ok=True)
     
-    visualizer = BlunderNetworkVisualization()
-    
-    if args.analyze:
-        print("Running weighted blunder graph analysis...")
-        try:
-            from src.modules.analysis.blunder_graph_analysis import run_analysis
-            run_analysis()
-        except Exception as e:
-            print(f"Error running weighted blunder graph analysis: {str(e)}")
+    # Initialize analysis components
+    queries = GraphQueries()
+    visualizer = NetworkVisualization()
     
     vis_types = args.visualizations
     if 'all' in vis_types:
-        vis_types = ['player', 'community', 'opening', 'weighted', 'rating']
+        vis_types = ['temporal', 'opening', 'player', 'community']
     
-    if 'player' in vis_types:
-        print("Generating player blunder network visualization...")
+    if 'temporal' in vis_types:
+        print("Generating temporal network visualization...")
         try:
-            plt_obj = visualizer.visualize_player_blunder_graph(min_edge_weight=args.min_edge_weight)
+            data = queries.get_temporal_network(time_window=args.time_window)
+            plt_obj = visualizer.visualize_temporal_network(data)
             if args.show:
                 visualizer.show_visualization(plt_obj)
             else:
-                visualizer.save_visualization(plt_obj, f'{args.output_dir}/player_blunder_network.png', dpi=args.dpi)
+                visualizer.save_visualization(plt_obj, f'{args.output_dir}/temporal_network.png', dpi=args.dpi)
         except Exception as e:
-            print(f"Error generating player blunder network: {str(e)}")
-    
-    if 'community' in vis_types:
-        print("Generating blunder communities visualization...")
-        try:
-            G = visualizer.analysis.create_player_blunder_graph()
-            if len(G.nodes()) == 0:
-                print("Warning: Player blunder graph is empty. Skipping community visualization.")
-            else:
-                plt_obj = visualizer.visualize_communities(min_community_size=args.min_community_size)
-                if args.show:
-                    visualizer.show_visualization(plt_obj)
-                else:
-                    visualizer.save_visualization(plt_obj, f'{args.output_dir}/blunder_communities.png', dpi=args.dpi)
-        except Exception as e:
-            print(f"Error generating blunder communities: {str(e)}")
-            print("You may need to install the python-louvain package: pip install python-louvain")
+            print(f"Error generating temporal network: {str(e)}")
     
     if 'opening' in vis_types:
-        print("Generating opening blunders visualization...")
+        print("Generating opening network visualization...")
         try:
-            plt_obj = visualizer.visualize_opening_blunders(top_n=args.top_openings)
+            data = queries.get_opening_network()
+            plt_obj = visualizer.visualize_opening_network(data, top_n=args.top_openings)
             if args.show:
                 visualizer.show_visualization(plt_obj)
             else:
-                visualizer.save_visualization(plt_obj, f'{args.output_dir}/opening_blunders.png', dpi=args.dpi)
+                visualizer.save_visualization(plt_obj, f'{args.output_dir}/opening_network.png', dpi=args.dpi)
         except Exception as e:
-            print(f"Error generating opening blunders: {str(e)}")
+            print(f"Error generating opening network: {str(e)}")
     
-    if 'weighted' in vis_types:
-        print("Generating weighted blunder graph visualization...")
+    if 'player' in vis_types:
+        print("Generating player network visualization...")
         try:
-            plt_obj = visualizer.visualize_weighted_blunder_graph()
+            data = queries.get_player_network_metrics()
+            plt_obj = visualizer.visualize_player_network(data)
             if args.show:
                 visualizer.show_visualization(plt_obj)
             else:
-                visualizer.save_visualization(plt_obj, f'{args.output_dir}/blunder_similarity_graph.png', dpi=args.dpi)
+                visualizer.save_visualization(plt_obj, f'{args.output_dir}/player_network.png', dpi=args.dpi)
         except Exception as e:
-            print(f"Error generating weighted blunder graph: {str(e)}")
+            print(f"Error generating player network: {str(e)}")
     
-    if 'rating' in vis_types:
-        print("Generating rating vs. blunder severity visualization...")
+    if 'community' in vis_types:
+        print("Generating community visualization...")
         try:
-            plt_obj = visualizer.visualize_rating_vs_blunder_severity()
+            data = queries.get_player_communities()
+            plt_obj = visualizer.visualize_communities(data)
             if args.show:
                 visualizer.show_visualization(plt_obj)
             else:
-                visualizer.save_visualization(plt_obj, f'{args.output_dir}/rating_vs_blunder_severity.png', dpi=args.dpi)
+                visualizer.save_visualization(plt_obj, f'{args.output_dir}/player_communities.png', dpi=args.dpi)
         except Exception as e:
-            print(f"Error generating rating vs. blunder severity visualization: {str(e)}")
+            print(f"Error generating community visualization: {str(e)}")
     
-    print("Visualization processing complete!")
+    print("Analysis complete!")
 
 if __name__ == "__main__":
     main()
