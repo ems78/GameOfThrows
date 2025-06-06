@@ -45,20 +45,32 @@ class GraphQueries:
 
     def get_game_dynamics(self):
         """
-        Get game dynamics including time controls, victory status, and game duration.
+        Get detailed game dynamics including time controls, victory status, and game duration.
+        Analyzes patterns in how games end and their relationship to player interactions.
         """
         query = """
-        MATCH (g:Game)
-        WITH g.increment_code as time_control,
+        MATCH (p1:Player)-[r1:PLAYED_IN]->(g:Game)<-[r2:PLAYED_IN]-(p2:Player)
+        WHERE p1 <> p2
+        WITH g,
+             g.increment_code as time_control,
              g.victory_status as status,
              g.winner as winner,
-             g.turns as turns
+             g.turns as turns,
+             abs(toFloat(r1.rating_at_game) - toFloat(r2.rating_at_game)) as rating_diff,
+             (g.last_move_at - g.created_at) as game_duration
         RETURN 
             time_control,
             status,
             winner,
             count(*) as frequency,
-            avg(turns) as avg_turns
+            avg(turns) as avg_turns,
+            avg(rating_diff) as avg_rating_diff,
+            avg(game_duration) as avg_duration,
+            collect({
+                turns: turns,
+                rating_diff: rating_diff,
+                duration: game_duration
+            }) as game_details
         ORDER BY frequency DESC
         """
         return self.db.query(query)
