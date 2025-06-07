@@ -122,15 +122,20 @@ python main.py --analyze
 - `--output-dir`: Directory to save visualizations (default: output)
 - `--output-format`: Output format for visualizations (png/pdf/svg)
 - `--dpi`: DPI for saved images (default: 300)
-- `--show`: Show visualizations instead of saving them
+- `--show`: Show visualizations
 - `--analyze`: Analyze network position and trends in opening usage
 
 ## Output
 
 Visualizations are saved as PNG files in the specified output directory:
 
-- `network_metrics.png`: Network position analysis and metrics
-- `opening_performance.png`: Opening usage patterns and performance analysis
+- `game_dynamics.png`: Breaks down game outcomes by victory status (mate, resign, outoftime, draw), showing average game length and rating differences for each type.
+- `gateway_openings.png`: Identifies and analyzes openings that frequently transition to other openings, showing their centrality in the opening network and win rates by color.
+- `network_metrics.png`: Displays the relationship between network centrality/clustering and win rates, helping identify how network position affects player performance.
+- `opening_communities.png`: Shows how players cluster based on their opening choices, including community sizes, average ratings, and common openings within each community.
+- `opening_network_position.png`: Visualizes how openings are connected in the network, showing win rates vs games played and identifying the most influential openings.
+- `opening_performance.png`: Analyzes opening statistics including most played openings, win rates vs game length, and overall opening performance metrics.
+- `rating_progression.png`: Shows player rating distribution, rating changes, and performance patterns across different rating ranges. Includes analysis of top players and their performance metrics.
 
 ## Data
 

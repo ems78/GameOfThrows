@@ -6,3 +6,4 @@ kagglehub>=0.2.1
 neo4j==5.14.1
 scipy==1.11.4
 numpy==1.26.2
+scikit-learn==1.6.1

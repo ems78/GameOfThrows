@@ -101,7 +101,12 @@ def run_analysis(config: ChessAnalysisConfig) -> Dict[str, Any]:
     
     results = {
         'network_metrics': analysis.analyze_network_position_vs_winrate(),
-        'opening_performance': analysis.analyze_opening_performance()
+        'opening_performance': analysis.analyze_opening_performance(),
+        'gateway_openings': analysis.analyze_gateway_openings(),
+        'opening_communities': analysis.analyze_opening_communities(),
+        'rating_progression': analysis.analyze_rating_progression_by_opponent_rating(),
+        'opening_network_position': analysis.analyze_opening_network_position(),
+        'game_dynamics': analysis.analyze_network_position_vs_game_dynamics()
     }
     
     return results
@@ -154,6 +159,61 @@ def main():
                 )
                 if config.show:
                     visualizer.show_visualization(fig2)
+            
+            # Gateway openings visualization
+            if 'gateway_openings' in results:
+                fig3 = visualizer.visualize_gateway_openings(results['gateway_openings'])
+                visualizer.save_visualization(
+                    fig3,
+                    os.path.join(config.output_dir, 'gateway_openings.png'),
+                    dpi=config.dpi
+                )
+                if config.show:
+                    visualizer.show_visualization(fig3)
+            
+            # Opening communities visualization
+            if 'opening_communities' in results:
+                fig4 = visualizer.visualize_opening_communities(results['opening_communities'])
+                visualizer.save_visualization(
+                    fig4,
+                    os.path.join(config.output_dir, 'opening_communities.png'),
+                    dpi=config.dpi
+                )
+                if config.show:
+                    visualizer.show_visualization(fig4)
+            
+            # Rating progression visualization
+            if 'rating_progression' in results:
+                fig5 = visualizer.visualize_rating_progression(results['rating_progression'])
+                visualizer.save_visualization(
+                    fig5,
+                    os.path.join(config.output_dir, 'rating_progression.png'),
+                    dpi=config.dpi
+                )
+                if config.show:
+                    visualizer.show_visualization(fig5)
+            
+            # Opening network position visualization
+            if 'opening_network_position' in results:
+                fig6 = visualizer.visualize_opening_network_metrics(results['opening_network_position'])
+                visualizer.save_visualization(
+                    fig6,
+                    os.path.join(config.output_dir, 'opening_network_position.png'),
+                    dpi=config.dpi
+                )
+                if config.show:
+                    visualizer.show_visualization(fig6)
+            
+            # Game dynamics visualization
+            if 'game_dynamics' in results:
+                fig8 = visualizer.visualize_game_dynamics(results['game_dynamics'])
+                visualizer.save_visualization(
+                    fig8,
+                    os.path.join(config.output_dir, 'game_dynamics.png'),
+                    dpi=config.dpi
+                )
+                if config.show:
+                    visualizer.show_visualization(fig8)
     
     print("Analysis complete!")
 
