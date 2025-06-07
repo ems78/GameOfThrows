@@ -18,7 +18,9 @@ class NetworkVisualization:
     """
     
     def __init__(self):
-        plt.style.use('seaborn-v0_8')  # Using a specific seaborn style version
+        """Initialize visualization settings."""
+        self.style = 'seaborn-v0_8'  # Using a specific seaborn style version
+        plt.style.use(self.style)
         self.colors = plt.cm.Set2(np.linspace(0, 1, 8))
         self.plt = plt
     
@@ -375,21 +377,57 @@ class NetworkVisualization:
             print(f"Traceback: {traceback.format_exc()}")
             raise
     
-    def save_visualization(self, plt_obj, filename, dpi=300):
-        """Save a visualization to a file"""
-        try:
-            plt_obj.savefig(filename, dpi=dpi, bbox_inches='tight')
-            print(f"Visualization saved to {filename}")
-        except Exception as e:
-            print(f"Error saving visualization to {filename}: {str(e)}")
-        finally:
-            plt_obj.close()
+    def visualize_network_metrics(self, results: Dict) -> plt.Figure:
+        """
+        Visualize network metrics vs win rate.
         
-    def show_visualization(self, plt_obj):
-        """Display a visualization"""
-        try:
-            plt_obj.show()
-        except Exception as e:
-            print(f"Error displaying visualization: {str(e)}")
-        finally:
-            plt_obj.close() 
+        Args:
+            results: Dictionary containing network metrics and win rates
+            
+        Returns:
+            matplotlib Figure object
+        """
+        if not results or 'raw_data' not in results:
+            raise ValueError("No valid data provided for visualization")
+            
+        df = pd.DataFrame(results['raw_data'])
+        
+        # Create figure with subplots
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        
+        # Plot centrality vs win rate
+        sns.scatterplot(data=df, x='centrality', y='win_rate', ax=ax1)
+        ax1.set_title('Centrality vs Win Rate')
+        ax1.set_xlabel('Centrality')
+        ax1.set_ylabel('Win Rate')
+        
+        # Plot clustering vs win rate
+        sns.scatterplot(data=df, x='clustering', y='win_rate', ax=ax2)
+        ax2.set_title('Clustering vs Win Rate')
+        ax2.set_xlabel('Clustering Coefficient')
+        ax2.set_ylabel('Win Rate')
+        
+        plt.tight_layout()
+        return fig
+    
+    def save_visualization(self, fig: plt.Figure, filename: str, dpi: int = 300) -> None:
+        """
+        Save visualization to file.
+        
+        Args:
+            fig: matplotlib Figure object
+            filename: Output file path
+            dpi: DPI for saved image
+        """
+        fig.savefig(filename, dpi=dpi, bbox_inches='tight')
+        plt.close(fig)
+    
+    def show_visualization(self, fig: plt.Figure) -> None:
+        """
+        Display visualization.
+        
+        Args:
+            fig: matplotlib Figure object
+        """
+        plt.show()
+        plt.close(fig) 

@@ -5,58 +5,40 @@ import pandas as pd
 from typing import Dict, List
 
 class PlayerPerformanceVisualization:
+    """Visualization class for player performance analysis."""
+    
     def __init__(self):
-        plt.style.use('seaborn-v0_8')
+        """Initialize visualization settings."""
+        self.style = 'seaborn-v0_8'  # Using a specific seaborn style version
+        plt.style.use(self.style)
         self.colors = plt.cm.Set2(np.linspace(0, 1, 8))
 
-    def visualize_rating_progression(self, data: List[Dict]) -> plt.Figure:
+    def visualize_rating_progression(self, results: Dict) -> plt.Figure:
         """
-        Visualize how players' ratings change based on their opponents' ratings.
-        Focuses on:
-        - Rating changes vs opponent rating differences
-        - Impact of playing against higher-rated opponents
-        - Long-term rating progression patterns
+        Visualize rating progression by opponent rating.
         
         Args:
-            data: List of player rating progression data
+            results: Dictionary containing rating progression data
+            
+        Returns:
+            matplotlib Figure object
         """
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        if not results or 'raw_data' not in results:
+            raise ValueError("No valid data provided for visualization")
+            
+        df = pd.DataFrame(results['raw_data'])
         
-        # Convert data to DataFrame
-        df = pd.DataFrame(data)
+        # Create figure
+        fig, ax = plt.subplots(figsize=(10, 6))
         
-        # Plot 1: Rating Changes vs Opponent Rating Differences
-        sns.scatterplot(data=df, x='rating_diff', y='rating_change', 
-                       alpha=0.6, ax=ax1)
+        # Plot rating change vs rating difference
+        sns.scatterplot(data=df, x='opponent_rating', y='rating_change', ax=ax)
+        ax.set_title('Rating Change by Opponent Rating')
+        ax.set_xlabel('Opponent Rating')
+        ax.set_ylabel('Rating Change')
         
-        # Add trend line
-        z = np.polyfit(df['rating_diff'], df['rating_change'], 1)
-        p = np.poly1d(z)
-        ax1.plot(df['rating_diff'], p(df['rating_diff']), 
-                "r--", alpha=0.8)
-        
-        ax1.set_title('Rating Changes vs Opponent Rating Differences')
-        ax1.set_xlabel('Opponent Rating Difference')
-        ax1.set_ylabel('Rating Change')
-        
-        # Add correlation stats
-        correlation = df['rating_diff'].corr(df['rating_change'])
-        ax1.text(0.05, 0.95, 
-                f'Correlation: {correlation:.3f}',
-                transform=ax1.transAxes, verticalalignment='top',
-                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-        
-        # Plot 2: Rating Progression Over Time
-        # Group by time periods and calculate average rating changes
-        df['time_period'] = pd.to_datetime(df['game_time']).dt.to_period('M')
-        progression = df.groupby('time_period')['rating_change'].mean()
-        
-        ax2.plot(range(len(progression)), progression.values, 
-                marker='o', alpha=0.7)
-        ax2.set_title('Average Rating Changes Over Time')
-        ax2.set_xlabel('Time Period')
-        ax2.set_ylabel('Average Rating Change')
-        ax2.grid(True, alpha=0.3)
+        # Add correlation line
+        sns.regplot(data=df, x='opponent_rating', y='rating_change', ax=ax, scatter=False, color='red')
         
         plt.tight_layout()
         return fig
@@ -182,12 +164,24 @@ class PlayerPerformanceVisualization:
             print(f"Traceback: {traceback.format_exc()}")
             raise
 
-    def save_visualization(self, fig: plt.Figure, filename: str, dpi: int = 300):
-        """Save the visualization to a file."""
+    def save_visualization(self, fig: plt.Figure, filename: str, dpi: int = 300) -> None:
+        """
+        Save visualization to file.
+        
+        Args:
+            fig: matplotlib Figure object
+            filename: Output file path
+            dpi: DPI for saved image
+        """
         fig.savefig(filename, dpi=dpi, bbox_inches='tight')
         plt.close(fig)
 
-    def show_visualization(self, fig: plt.Figure):
-        """Display the visualization."""
+    def show_visualization(self, fig: plt.Figure) -> None:
+        """
+        Display visualization.
+        
+        Args:
+            fig: matplotlib Figure object
+        """
         plt.show()
         plt.close(fig) 

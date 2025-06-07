@@ -86,7 +86,7 @@ class PlayerNetworkAnalysis:
         and game history.
         
         Args:
-            player_username: Username of the player to analyze
+            player_username: Username/ID of the player to analyze
             
         Returns:
             Dict containing:
@@ -95,7 +95,7 @@ class PlayerNetworkAnalysis:
             - factors contributing to the prediction
         """
         query = """
-        MATCH (p:Player {username: $username})-[r:PLAYED_IN]->(g:Game)
+        MATCH (p:Player {id: $id})-[r:PLAYED_IN]->(g:Game)
         WITH p, g, r,
              datetime(g.created_at) as game_time
         ORDER BY game_time
@@ -114,14 +114,15 @@ class PlayerNetworkAnalysis:
                  END
              }) as games
         WHERE size(games) >= 5
-        RETURN p.username,
+        RETURN p.id as player_id,
+               p.username as username,
                [g in games | g.rating] as ratings,
                [g in games | g.time] as times,
                [g in games | g.opponent_rating] as opponent_ratings,
                [g in games | g.result] as results
         """
         
-        results = self.queries.db.query(query, username=player_username)
+        results = self.queries.db.query(query, {'id': player_username})
         
         if not results:
             return {'error': 'Player not found or insufficient games'}
@@ -133,28 +134,15 @@ class PlayerNetworkAnalysis:
         
         # Calculate network metrics
         centrality = self._calculate_centrality(player_username)
-        clustering = self._calculate_clustering(player_username)
-        
-        # Simple linear regression for rating progression
-        times = [(t - data['times'][0]).total_seconds() for t in data['times']]
-        ratings = data['ratings']
-        
-        slope, intercept, r_value, p_value, std_err = stats.linregress(times, ratings)
         
         return {
-            'current_rating': ratings[-1],
-            'predicted_rating': slope * (times[-1] + 86400 * 30) + intercept,  # Predict 30 days ahead
-            'confidence_interval': std_err * 1.96,
-            'network_metrics': {
-                'centrality': centrality,
-                'clustering_coefficient': clustering
-            },
-            'regression_stats': {
-                'r_squared': r_value ** 2,
-                'p_value': p_value
-            },
+            'player_id': data['player_id'],
+            'username': data.get('username', player_username),  # Use ID if username is null
+            'ratings': data['ratings'],
             'times': data['times'],
-            'ratings': ratings
+            'opponent_ratings': data['opponent_ratings'],
+            'results': data['results'],
+            'centrality': centrality
         }
 
     def analyze_network_position_vs_winrate(self) -> Dict:
@@ -182,7 +170,8 @@ class PlayerNetworkAnalysis:
                  ELSE 0
              END) as wins
         WHERE total_games >= 10
-        RETURN p.username,
+        RETURN p.id as player_id,
+               p.username as username,
                toFloat(p.rating) as rating,
                wins/total_games as win_rate,
                total_games
@@ -193,12 +182,13 @@ class PlayerNetworkAnalysis:
         # Calculate network metrics for each player
         player_metrics = []
         for result in results:
-            username = result['username']
-            centrality = self._calculate_centrality(username)
-            clustering = self._calculate_clustering(username)
+            player_id = result['player_id']
+            centrality = self._calculate_centrality(player_id)
+            clustering = self._calculate_clustering(player_id)
             
             player_metrics.append({
-                'username': username,
+                'player_id': player_id,
+                'username': result.get('username', player_id),  # Use ID if username is null
                 'rating': result['rating'],
                 'win_rate': result['win_rate'],
                 'centrality': centrality,
@@ -226,29 +216,47 @@ class PlayerNetworkAnalysis:
             'raw_data': player_metrics
         }
 
-    def _calculate_centrality(self, username: str) -> float:
+    def _calculate_centrality(self, player_id: str) -> float:
         """Calculate betweenness centrality for a player."""
-        query = """
-        CALL gds.betweenness.stream({
-            nodeProjection: 'Player',
-            relationshipProjection: {
-                PLAYED_IN: {
-                    type: 'PLAYED_IN',
-                    orientation: 'UNDIRECTED'
+        # First try using GDS library
+        try:
+            query = """
+            CALL gds.betweenness.stream({
+                nodeProjection: 'Player',
+                relationshipProjection: {
+                    PLAYED_IN: {
+                        type: 'PLAYED_IN',
+                        orientation: 'UNDIRECTED'
+                    }
                 }
-            }
-        })
-        YIELD nodeId, score
-        WHERE gds.util.asNode(nodeId).username = $username
-        RETURN score
-        """
-        results = self.queries.db.query(query, username=username)
-        return results[0]['score'] if results else 0.0
+            })
+            YIELD nodeId, score
+            WHERE gds.util.asNode(nodeId).id = $id
+            RETURN score
+            """
+            results = self.queries.db.query(query, {'id': player_id})
+            return results[0]['score'] if results else 0.0
+        except Exception as e:
+            if "ProcedureNotFound" in str(e):
+                # Fallback to a simpler degree centrality calculation
+                query = """
+                MATCH (p:Player {id: $id})-[r:PLAYED_IN]->(g:Game)
+                WITH p, count(DISTINCT g) as games_played
+                MATCH (p2:Player)-[r2:PLAYED_IN]->(g2:Game)
+                WITH p, games_played, count(DISTINCT p2) as total_players,
+                     count(DISTINCT g2) as total_games
+                RETURN toFloat(games_played) / toFloat(total_games) as centrality
+                """
+                results = self.queries.db.query(query, {'id': player_id})
+                return results[0]['centrality'] if results else 0.0
+            else:
+                # Re-raise if it's a different error
+                raise
 
-    def _calculate_clustering(self, username: str) -> float:
+    def _calculate_clustering(self, player_id: str) -> float:
         """Calculate local clustering coefficient for a player."""
         query = """
-        MATCH (p:Player {username: $username})-[:PLAYED_IN]->(g1:Game)<-[:PLAYED_IN]-(opp1:Player)
+        MATCH (p:Player {id: $id})-[:PLAYED_IN]->(g1:Game)<-[:PLAYED_IN]-(opp1:Player)
         MATCH (p)-[:PLAYED_IN]->(g2:Game)<-[:PLAYED_IN]-(opp2:Player)
         WHERE opp1 <> opp2
         MATCH (opp1)-[:PLAYED_IN]->(g3:Game)<-[:PLAYED_IN]-(opp2)
@@ -259,5 +267,5 @@ class PlayerNetworkAnalysis:
             ELSE 0
         END as clustering_coefficient
         """
-        results = self.queries.db.query(query, username=username)
+        results = self.queries.db.query(query, {'id': player_id})
         return results[0]['clustering_coefficient'] if results else 0.0 

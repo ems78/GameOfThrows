@@ -5,8 +5,12 @@ from typing import Dict, List
 import pandas as pd
 
 class PlayerAnalysisVisualization:
+    """Visualization class for player analysis results."""
+    
     def __init__(self):
-        plt.style.use('default')
+        """Initialize visualization settings."""
+        self.style = 'seaborn-v0_8'  # Using a specific seaborn style version
+        plt.style.use(self.style)
         self.colors = plt.cm.Set2(np.linspace(0, 1, 8))
 
     def visualize_rating_progression_analysis(self, results: Dict) -> plt.Figure:
@@ -151,6 +155,39 @@ class PlayerAnalysisVisualization:
                 f'Correlation: {clustering_stats["correlation"]:.3f}\np-value: {clustering_stats["p_value"]:.3e}',
                 transform=ax2.transAxes, verticalalignment='top',
                 bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+        
+        plt.tight_layout()
+        return fig
+
+    def visualize_player_analysis(self, results: Dict) -> plt.Figure:
+        """
+        Visualize player analysis results.
+        
+        Args:
+            results: Dictionary containing player analysis results
+            
+        Returns:
+            matplotlib Figure object
+        """
+        if not results or 'raw_data' not in results:
+            raise ValueError("No valid data provided for visualization")
+            
+        df = pd.DataFrame(results['raw_data'])
+        
+        # Create figure with subplots
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        
+        # Plot rating progression
+        sns.lineplot(data=df, x='game_number', y='rating', ax=ax1)
+        ax1.set_title('Rating Progression')
+        ax1.set_xlabel('Game Number')
+        ax1.set_ylabel('Rating')
+        
+        # Plot win rate by opponent rating
+        sns.scatterplot(data=df, x='opponent_rating', y='win_rate', ax=ax2)
+        ax2.set_title('Win Rate by Opponent Rating')
+        ax2.set_xlabel('Opponent Rating')
+        ax2.set_ylabel('Win Rate')
         
         plt.tight_layout()
         return fig
