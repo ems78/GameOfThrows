@@ -15,6 +15,7 @@ import argparse
 import json
 from typing import Dict, Any
 import pandas as pd
+import numpy as np
 
 from src.database.import_data import import_data_to_neo4j, delete_all_data
 from src.visualization import Visualization
@@ -85,9 +86,25 @@ def save_analysis_results(results: Dict[str, Any], filename: str, output_format:
         filename: Output file path
         output_format: Format to save results in ('json' or 'csv')
     """
+    def convert_to_serializable(obj):
+        if isinstance(obj, pd.DataFrame):
+            return obj.to_dict('records')
+        elif isinstance(obj, dict):
+            return {str(k): convert_to_serializable(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_to_serializable(item) for item in obj]
+        elif isinstance(obj, (np.int64, np.int32, np.float64, np.float32)):
+            return obj.item()
+        elif isinstance(obj, (np.ndarray,)):
+            return obj.tolist()
+        elif isinstance(obj, (set,)):
+            return list(obj)
+        return obj
+
     if output_format == 'json':
+        serializable_results = convert_to_serializable(results)
         with open(filename, 'w') as f:
-            json.dump(results, f, indent=2)
+            json.dump(serializable_results, f, indent=2)
     elif output_format == 'csv':
         if isinstance(results, dict) and 'raw_data' in results:
             df = pd.DataFrame(results['raw_data'])
@@ -98,6 +115,8 @@ def save_analysis_results(results: Dict[str, Any], filename: str, output_format:
 def run_analysis(config: ChessAnalysisConfig) -> Dict[str, Any]:
     """Run network position analysis and return results."""
     analysis = Analysis()
+    
+    print("Starting analysis...")
     
     results = {
         'network_metrics': analysis.analyze_network_position_vs_winrate(),
@@ -133,11 +152,16 @@ def main():
     visualizer = Visualization()
     
     if config.analyze:
-        print("Analyzing...")
         results = run_analysis(config)
+        
+        # Save results as JSON
+        output_file = os.path.join(config.output_dir, 'analysis_results.json')
+        save_analysis_results(results, output_file, 'json')
+        print(f"Analysis results saved to {output_file}")
         
         # Generate and save visualizations
         if results:
+            print("Generating visualizations...")
             # Network metrics visualization
             if 'network_metrics' in results:
                 fig1 = visualizer.visualize_network_metrics(results['network_metrics'])
@@ -214,6 +238,7 @@ def main():
                 )
                 if config.show:
                     visualizer.show_visualization(fig8)
+            print("Visualizations saved to output directory")
     
     print("Analysis complete!")
 

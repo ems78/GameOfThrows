@@ -843,7 +843,7 @@ class Visualization:
         
         # Plot 1: Game Length by Victory Status
         ax1 = fig.add_subplot(gs[0, 0])
-        bars1 = sns.barplot(data=df, x='status', y='avg_game_length', ax=ax1, palette=status_colors)
+        bars1 = sns.barplot(data=df, x='status', y='avg_game_length', ax=ax1, palette=status_colors, hue='status')
         ax1.set_title('Average Game Length by Victory Status')
         ax1.set_xlabel('Victory Status')
         ax1.set_ylabel('Average Game Length (turns)')
@@ -856,7 +856,7 @@ class Visualization:
         
         # Plot 2: Rating Difference by Victory Status
         ax2 = fig.add_subplot(gs[0, 1])
-        bars2 = sns.barplot(data=df, x='status', y='avg_rating_diff', ax=ax2, palette=status_colors)
+        bars2 = sns.barplot(data=df, x='status', y='avg_rating_diff', ax=ax2, palette=status_colors, hue='status')
         ax2.set_title('Average Rating Difference by Victory Status')
         ax2.set_xlabel('Victory Status')
         ax2.set_ylabel('Average Rating Difference')
@@ -869,7 +869,7 @@ class Visualization:
         
         # Plot 3: Game Distribution
         ax3 = fig.add_subplot(gs[1, 0])
-        bars3 = sns.barplot(data=df, x='status', y='total_games', ax=ax3, palette=status_colors)
+        bars3 = sns.barplot(data=df, x='status', y='total_games', ax=ax3, palette=status_colors, hue='status')
         ax3.set_title('Number of Games by Victory Status')
         ax3.set_xlabel('Victory Status')
         ax3.set_ylabel('Number of Games')

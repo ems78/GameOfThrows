@@ -73,6 +73,7 @@ class Analysis:
                 'sample_size': len(df),
                 'raw_data': df.to_dict('records')
             }
+            
         except Exception as e:
             print(f"Error in analyze_rating_progression_by_opponent_rating: {str(e)}")
             print(f"Error type: {type(e)}")
@@ -237,6 +238,9 @@ class Analysis:
             - opening repertoire diversity
             - game length patterns
         """
+        print("\n=== Network Position vs Win Rate Analysis ===")
+        print("Analyzing how player network position affects performance...")
+        
         query = """
         MATCH (p:Player)-[r1:PLAYED_IN]->(g:Game)<-[r2:PLAYED_IN]-(opp:Player)
         WHERE p <> opp
@@ -254,7 +258,7 @@ class Analysis:
              count(DISTINCT g.increment_code) as time_control_variety
         WHERE total_games >= 10
         WITH p, total_games, wins, avg_game_length, time_control_variety,
-             toFloat(wins)/toFloat(total_games) as win_rate  // Explicitly cast to float
+             toFloat(wins)/toFloat(total_games) as win_rate
         MATCH (p)-[:PLAYED_IN]->(g:Game)-[:USES]->(o:Opening)
         WITH p, total_games, wins, avg_game_length, time_control_variety, win_rate,
              count(DISTINCT o.eco_code) as opening_variety,
@@ -272,19 +276,7 @@ class Analysis:
         """
         
         results = self.db.query(query)
-        
-        # Debug raw results
-        print("\nRaw results sample:")
-        for i, result in enumerate(results[:5]):  # Show first 5 results
-            print(f"\nPlayer {i+1}:")
-            print(f"Username: {result['username']}")
-            print(f"Total games: {result['total_games']}")
-            print(f"Wins: {result['wins']}")
-            print(f"Win rate: {result['win_rate']:.3f}")
-            print(f"Rating: {result['rating']}")
-            # Add manual calculation check
-            manual_win_rate = float(result['wins']) / float(result['total_games'])
-            print(f"Manual win rate check: {manual_win_rate:.3f}")
+        print(f"\nAnalyzed {len(results)} players with sufficient game history")
         
         # Calculate network metrics for each player
         player_metrics = []
@@ -316,14 +308,13 @@ class Analysis:
         clusterings = [p['clustering'] for p in player_metrics]
         opening_diversities = [p['opening_diversity'] for p in player_metrics]
         
-        # Debug win rate distribution
-        # print("\nWin rate distribution:")
-        # print(f"Min win rate: {min(win_rates):.3f}")
-        # print(f"Max win rate: {max(win_rates):.3f}")
-        # print(f"Mean win rate: {np.mean(win_rates):.3f}")
-        # print(f"Median win rate: {np.median(win_rates):.3f}")
-        # print(f"Win rates <= 0.1: {sum(1 for w in win_rates if w <= 0.1)}")
-        # print(f"Win rates >= 0.9: {sum(1 for w in win_rates if w >= 0.9)}")
+        # Print key metrics
+        print("\n=== Key Performance Metrics ===")
+        print(f"Average Win Rate: {np.mean(win_rates):.3f}")
+        print(f"Win Rate Std Dev: {np.std(win_rates):.3f}")
+        print(f"Average Centrality: {np.mean(centralities):.3f}")
+        print(f"Average Clustering: {np.mean(clusterings):.3f}")
+        print(f"Average Opening Diversity: {np.mean(opening_diversities):.3f}")
         
         # Helper function to check if array is constant
         def is_constant(arr):
@@ -334,10 +325,16 @@ class Analysis:
         clustering_corr, clustering_p = (0, 1) if is_constant(clusterings) else stats.pearsonr(win_rates, clusterings)
         diversity_corr, diversity_p = (0, 1) if is_constant(opening_diversities) else stats.pearsonr(win_rates, opening_diversities)
         
+        print("\n=== Correlation Analysis ===")
+        print(f"Centrality vs Win Rate: {centrality_corr:.3f} (p-value: {centrality_p:.3f})")
+        print(f"Clustering vs Win Rate: {clustering_corr:.3f} (p-value: {clustering_p:.3f})")
+        print(f"Opening Diversity vs Win Rate: {diversity_corr:.3f} (p-value: {diversity_p:.3f})")
+        
         # Calculate rating range statistics
         rating_ranges = [(0, 1200), (1200, 1400), (1400, 1600), (1600, 1800), (1800, 2000), (2000, float('inf'))]
         range_stats = {}
         
+        print("\n=== Performance by Rating Range ===")
         for low, high in rating_ranges:
             range_players = [p for p in player_metrics if low <= p['rating'] < high]
             if range_players:
@@ -348,6 +345,12 @@ class Analysis:
                     'avg_clustering': np.mean([p['clustering'] for p in range_players]),
                     'avg_opening_diversity': np.mean([p['opening_diversity'] for p in range_players])
                 }
+                print(f"\nRating Range {low}-{high}:")
+                print(f"  Players: {len(range_players)}")
+                print(f"  Avg Win Rate: {range_stats[f'{low}-{high}']['avg_win_rate']:.3f}")
+                print(f"  Avg Centrality: {range_stats[f'{low}-{high}']['avg_centrality']:.3f}")
+                print(f"  Avg Clustering: {range_stats[f'{low}-{high}']['avg_clustering']:.3f}")
+                print(f"  Avg Opening Diversity: {range_stats[f'{low}-{high}']['avg_opening_diversity']:.3f}")
         
         return {
             'centrality_correlation': {
@@ -381,6 +384,9 @@ class Analysis:
             - transition_stats: DataFrame with opening transition patterns
             - summary_stats: Dict with overall opening statistics
         """
+        print("\n=== Opening Performance Analysis ===")
+        print("Analyzing opening performance across different rating levels...")
+        
         # Basic opening statistics
         query = """
         MATCH (p:Player)-[r:PLAYED_IN]->(g:Game)-[:USES]->(o:Opening)
@@ -398,6 +404,7 @@ class Analysis:
         """
         
         results = self.db.query(query)
+        print(f"\nAnalyzed {len(results)} opening-color combinations with sufficient games")
         
         # Convert results to DataFrame
         data = []
@@ -413,6 +420,18 @@ class Analysis:
             })
         
         opening_stats = pd.DataFrame(data)
+        
+        # Print top performing openings
+        print("\n=== Top Performing Openings ===")
+        for color in ['white', 'black']:
+            color_stats = opening_stats[opening_stats['color'] == color]
+            top_openings = color_stats.nlargest(5, 'win_rate')
+            print(f"\nTop 5 {color} openings by win rate:")
+            for _, row in top_openings.iterrows():
+                print(f"  {row['opening_code']} ({row['opening_name']}):")
+                print(f"    Win Rate: {row['win_rate']:.3f}")
+                print(f"    Games Played: {row['games_played']}")
+                print(f"    Avg Game Length: {row['avg_game_length']:.1f} moves")
         
         # Performance by rating level
         rating_query = """
@@ -433,7 +452,9 @@ class Analysis:
         """
         
         rating_results = self.db.query(rating_query)
+        print(f"\nAnalyzed {len(rating_results)} opening-rating level combinations")
         
+        # Convert rating results to DataFrame
         rating_data = []
         for record in rating_results:
             rating_data.append({
@@ -446,6 +467,18 @@ class Analysis:
             })
         
         rating_level_stats = pd.DataFrame(rating_data)
+        
+        # Print performance by rating level
+        print("\n=== Performance by Rating Level ===")
+        for level in ['Beginner', 'Intermediate', 'Advanced']:
+            level_stats = rating_level_stats[rating_level_stats['rating_level'] == level]
+            if not level_stats.empty:
+                print(f"\n{level} Players:")
+                print(f"  Total Games: {level_stats['games_played'].sum()}")
+                print(f"  Average Win Rate: {level_stats['win_rate'].mean():.3f}")
+                most_common = level_stats.groupby('opening_code')['games_played'].sum().idxmax()
+                most_common_name = level_stats[level_stats['opening_code'] == most_common]['opening_name'].iloc[0]
+                print(f"  Most Common Opening: {most_common} ({most_common_name})")
         
         # Opening transition patterns
         transition_query = """
@@ -462,7 +495,9 @@ class Analysis:
         """
         
         transition_results = self.db.query(transition_query)
+        print(f"\nAnalyzed {len(transition_results)} opening transitions")
         
+        # Convert transition results to DataFrame
         transition_data = []
         for record in transition_results:
             transition_data.append({
@@ -472,6 +507,12 @@ class Analysis:
             })
         
         transition_stats = pd.DataFrame(transition_data)
+        
+        # Print common transitions
+        print("\n=== Common Opening Transitions ===")
+        top_transitions = sorted(transition_results, key=lambda x: x['transition_count'], reverse=True)[:5]
+        for transition in top_transitions:
+            print(f"  {transition['from_opening']} → {transition['to_opening']}: {transition['transition_count']} times")
         
         # Calculate summary statistics
         summary_stats = {
@@ -483,6 +524,15 @@ class Analysis:
             'shortest_avg_game': opening_stats.loc[opening_stats['avg_game_length'].idxmin()]['opening_name'],
             'longest_avg_game': opening_stats.loc[opening_stats['avg_game_length'].idxmax()]['opening_name']
         }
+        
+        print("\n=== Summary Statistics ===")
+        print(f"Total Unique Openings: {summary_stats['total_openings']}")
+        print(f"Total Games Analyzed: {summary_stats['total_games']}")
+        print(f"Average Games per Opening: {summary_stats['avg_games_per_opening']:.1f}")
+        print(f"Most Common Opening: {summary_stats['most_common_opening']}")
+        print(f"Highest Win Rate Opening: {summary_stats['highest_winrate_opening']}")
+        print(f"Shortest Average Game: {summary_stats['shortest_avg_game']}")
+        print(f"Longest Average Game: {summary_stats['longest_avg_game']}")
         
         return {
             'opening_stats': opening_stats,
@@ -651,6 +701,9 @@ class Analysis:
             - community_stats: Dict with community-level statistics
             - player_community_map: Dict mapping players to their communities
         """
+        print("\n=== Opening Communities Analysis ===")
+        print("Analyzing player communities based on opening preferences...")
+        
         # First, get player-opening relationships
         player_opening_query = """
         MATCH (p:Player)-[r:PLAYED_IN]->(g:Game)-[:USES]->(o:Opening)
@@ -678,7 +731,7 @@ class Analysis:
                 'player_community_map': {}
             }
         
-        print(f"Found {len(player_results)} players with sufficient opening repertoire")
+        print(f"\nFound {len(player_results)} players with sufficient opening repertoire")
         
         # Convert to DataFrame for analysis
         player_data = []
@@ -710,7 +763,7 @@ class Analysis:
                     opening_names[eco] = opening['name']  # Store the name
                 opening_counts[eco] += opening['times_played']
         
-        print("\nTop 10 most played openings:")
+        print("\n=== Top 10 Most Played Openings ===")
         for opening, count in sorted(opening_counts.items(), key=lambda x: x[1], reverse=True)[:10]:
             print(f"{opening} ({opening_names[opening]}): {count} times")
         
@@ -736,11 +789,11 @@ class Analysis:
         # Combine similarities (normalize and weight)
         combined_similarity = 0.7 * cosine_sim + 0.3 * (1 - euclidean_dist / euclidean_dist.max())
         
-        print(f"\nSimilarity matrix shape: {combined_similarity.shape}")
-        print(f"Min similarity: {combined_similarity.min()}")
-        print(f"Max similarity: {combined_similarity.max()}")
-        print(f"Mean similarity: {combined_similarity.mean()}")
-        print(f"Std similarity: {combined_similarity.std()}")
+        print("\n=== Similarity Metrics ===")
+        print(f"Min similarity: {combined_similarity.min():.3f}")
+        print(f"Max similarity: {combined_similarity.max():.3f}")
+        print(f"Mean similarity: {combined_similarity.mean():.3f}")
+        print(f"Std similarity: {combined_similarity.std():.3f}")
         
         # Use hierarchical clustering for more control over community formation
         from sklearn.cluster import AgglomerativeClustering
@@ -756,6 +809,7 @@ class Analysis:
         
         from sklearn.metrics import silhouette_score
         
+        print("\n=== Testing Different Numbers of Communities ===")
         for n_clusters in n_clusters_range:
             clustering = AgglomerativeClustering(
                 n_clusters=n_clusters,
@@ -766,7 +820,7 @@ class Analysis:
             
             # Calculate silhouette score
             silhouette_avg = silhouette_score(1 - combined_similarity, labels)
-            print(f"\nTesting n_clusters={n_clusters}:")
+            print(f"\nTesting {n_clusters} communities:")
             print(f"Silhouette score: {silhouette_avg:.3f}")
             
             if silhouette_avg > best_silhouette:
@@ -774,14 +828,14 @@ class Analysis:
                 best_n_clusters = n_clusters
                 best_labels = labels
         
-        print(f"\nBest number of clusters: {best_n_clusters} (silhouette score: {best_silhouette:.3f})")
+        print(f"\nBest number of communities: {best_n_clusters} (silhouette score: {best_silhouette:.3f})")
         
         # Apply the best clustering
         player_df['community'] = best_labels
         
         # Print community sizes and characteristics
         community_sizes = player_df['community'].value_counts()
-        print("\nCommunity sizes:")
+        print("\n=== Community Sizes ===")
         for comm, size in community_sizes.items():
             print(f"Community {comm}: {size} players")
         
@@ -815,10 +869,10 @@ class Analysis:
                 'common_openings': common_openings_with_names
             }
             
-            print(f"\nCommunity {community} characteristics:")
-            print(f"Size: {len(community_players)}")
-            print(f"Average rating: {community_players['rating'].mean():.1f}")
-            print("Top openings:")
+            print(f"\n=== Community {community} Characteristics ===")
+            print(f"Size: {len(community_players)} players")
+            print(f"Average Rating: {community_players['rating'].mean():.1f} ± {community_players['rating'].std():.1f}")
+            print("Top 5 Openings:")
             for eco, count, name in common_openings_with_names:
                 print(f"  - {eco} ({name}): {count} times")
         
@@ -853,6 +907,13 @@ class Analysis:
                     'black_win_rate': result['black_wins'] / result['total_games'],
                     'draw_rate': result['draws'] / result['total_games']
                 }
+                
+                print(f"\n=== Community {community} Game Statistics ===")
+                print(f"Total Games: {result['total_games']}")
+                print(f"Average Game Length: {result['avg_game_length']:.1f} moves")
+                print(f"White Win Rate: {result['white_wins'] / result['total_games']:.3f}")
+                print(f"Black Win Rate: {result['black_wins'] / result['total_games']:.3f}")
+                print(f"Draw Rate: {result['draws'] / result['total_games']:.3f}")
         
         # Add community metrics to community stats
         for community in community_stats:
