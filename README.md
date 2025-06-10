@@ -1,117 +1,162 @@
 # Game of Throws
 
-A network analysis project that explores chess blunders as a graph network using Neo4j.
+A network analysis project that explores chess game data as a graph network using Neo4j.
 
 ## Project Overview
-This project analyzes chess game data to discover patterns in how players make mistakes (blunders). By representing blunders as a network, we can identify relationships between players, their common mistakes, and the chess openings where these mistakes occur.
+This project analyzes chess game data to discover patterns in player behavior and strategic choices using network analysis. By representing chess games as a complex network, we can identify relationships between players, their network positions, and how these positions affect their performance and development.
 
-## Features
-- Graph database of chess players, games, openings, and blunders
-- Blunder community detection
-- Blunder cascade analysis
-- Opening analysis by blunder frequency
-- Network visualization of blunder patterns
+## Problem Statement
 
-## Setup Instructions
+### Research Questions
+1. **Player Performance and Network Position**
+   - How does a player's network position (centrality, clustering coefficient) correlate with their win rate?
+   - Can we identify patterns in how network position affects player development?
+   - What network metrics best predict player performance?
 
-### Prerequisites
+2. **Opening Theory and Network Analysis**
+   - How do opening choices create distinct communities of players?
+   - Can we identify patterns in opening usage and their impact on game outcomes?
+   - What network structures emerge from opening choices?
 
-- Docker
-- Python 3.8+
-- Neo4j Database
-- Stockfish chess engine
+### Significance
+This research is significant for both database and network analysis because:
 
-### Installation
+1. **Database Perspective**
+   - Demonstrates how to model and query complex graph relationships in Neo4j
+   - Shows how to efficiently analyze large-scale game data with multiple attributes
+   - Illustrates the importance of proper data modeling for network analysis
+   - Leverages Neo4j's native graph algorithms for performance metrics
 
-1. **Clone the repository**
+2. **Network Analysis Perspective**
+   - Applies network theory to understand player development and performance
+   - Uses graph metrics to analyze player relationships and communities
+   - Demonstrates how network analysis can reveal hidden patterns in competitive systems
+   - Shows the impact of network position on player success
+
+3. **Practical Applications**
+   - Could help players understand their development path and optimal training strategies
+   - May improve rating systems by incorporating network-based metrics
+   - Could help tournament organizers optimize pairings
+   - Provides insights into how network position affects player performance
+
+### Features
+
+- Graph database of chess players, games, and openings
+- Network position analysis of player interactions
+- Opening usage and popularity analysis
+- Player performance metrics and rating progression
+- Community detection in the player network
+- Interactive and static visualizations
+
+### Project Structure
+
 ```
-git clone https://github.com/ems78/GameOfThrows.git
-cd GameOfThrows
+├── data/                  # Directory for chess game dataset
+├── src/
+│   ├── config.py         # Configuration settings
+│   ├── analysis.py       # Analysis algorithms and metrics
+│   ├── visualization.py  # Result visualization
+│   └── database/         # Neo4j database interaction
+│       ├── db_manager.py    # Database connection management
+│       ├── models.py        # Data models and CRUD operations
+│       ├── import_data.py   # Data import functionality
+│       └── schema.cypher    # Database schema definition
+└── main.py               # Main entry point for data import and analysis
 ```
 
-2. **Update configuration if needed**
+### Setup Instructions
 
-   Located in `src/config.py`
-
-3. **Start Neo4j using Docker**
- ```
+1. **Start Neo4j using Docker**
+```bash
 docker run --name neo4j-gameofthrows -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/gameofthrows -d neo4j:latest
 ```
 
-4. **Create and activate Python virtual environment**
-```
+2. **Create and activate Python virtual environment**
+```bash
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-5. **Install dependencies**
-```
+3. **Install dependencies**
+```bash
 pip install -r requirements.txt
-brew install stockfish
 ```
 
-6. **Import dataset**
-```
-python import_chess_data.py
+4. **Import dataset**
+```bash
+python main.py --import-data --batch-size 1000 --max-games 10000
 ```
 
-7. **Access Neo4j Browser**
-
+5. **Access Neo4j Browser**
    Open your web browser and navigate to http://localhost:7474/
    - Username: neo4j
    - Password: gameofthrows
 
-## Project Structure
-```
-├── data/                  # Directory for chess game dataset
-├── src/
-│   ├── main.py            # Main entry point
-│   ├── config.py          # Configuration settings
-│   ├── modules/
-│       ├── blunder_detection/   # Chess blunder detection algorithms
-│       ├── database/            # Neo4j database interaction
-│       ├── analysis/            # Network analysis algorithms
-│       └── visualization/       # Result visualization
-└── tests/                 # Unit tests
-```
-
 ## Usage
 
-Run the main script to generate visualization
+### Data Import
 ```bash
-# Generate all visualization with default settings
-python main.py
+# Import data with default settings
+python main.py --import-data
 
-# Show visualizations on screen instead of saving them
-python main.py --show
+# Import with custom batch size and game limit
+python main.py --import-data --batch-size 1000 --max-games 10000
 
-# Generate only player network visualization with higher minimum edge weight
-python main.py --visualization player --min-edge-weight 3
-
-# Generate high-resolution opening blunder chart with more openings
-python main.py --visualization opening --top-openings 15 --dpi 600
-
-# Generate community visualization with larger minimum community size
-python main.py --visualization community --min-community-size 5
+# Delete existing data before import
+python main.py --import-data --delete-all
 ```
 
-## Command Line Options
+### Analysis and Visualization
+```bash
+python main.py --analyze
+```
 
+### Command Line Options
+
+- `--import-data`: Import chess data to Neo4j
+- `--batch-size`: Number of games to process in each batch (default: 1000)
+- `--max-games`: Maximum number of games to import (default: all)
+- `--delete-all`: Delete all existing data before import
 - `--output-dir`: Directory to save visualizations (default: output)
-- `--min-edge-weight`: Minimum edge weight for player blunder graph (default: 2)
-- `--min-community-size`: Minimum size of communities to visualize (default: 3)
-- `--top-openings`: Number of top openings to show (default: 10)
+- `--output-format`: Output format for visualizations (png/pdf/svg)
 - `--dpi`: DPI for saved images (default: 300)
-- `--show`: Show visualizations instead of saving them
-- `--visualization`: Which visualizations to generate (choices: player, community, opening, all)
+- `--show`: Show visualizations
+- `--analyze`: Analyze network position and trends in opening usage
 
 ## Output
 
 Visualizations are saved as PNG files in the specified output directory:
 
-- `player_blunder_network.png`: Network of players connected by similar blunders
-- `blunder_communities.png`: Communities of players with similar blunder patterns
-- `opening_blunders.png`: Bar chart of openings with most blunders
+- `game_dynamics.png`: Breaks down game outcomes by victory status (mate, resign, outoftime, draw), showing average game length and rating differences for each type.
+- `gateway_openings.png`: Identifies and analyzes openings that frequently transition to other openings, showing their centrality in the opening network and win rates by color.
+- `network_metrics.png`: Displays the relationship between network centrality/clustering and win rates, helping identify how network position affects player performance.
+- `opening_communities.png`: Shows how players cluster based on their opening choices, including community sizes, average ratings, and common openings within each community.
+- `opening_network_position.png`: Visualizes how openings are connected in the network, showing win rates vs games played and identifying the most influential openings.
+- `opening_performance.png`: Analyzes opening statistics including most played openings, win rates vs game length, and overall opening performance metrics.
+- `rating_progression.png`: Shows player rating distribution, rating changes, and performance patterns across different rating ranges.
+
+## Key Findings
+
+1. **Network Position vs Performance**
+   - Network metrics show weak correlations with performance:
+     - Centrality correlation with win rate: -0.068 (p=0.545)
+     - Clustering correlation with win rate: 0.062 (p=0.577)
+     - Opening diversity correlation: 0.000 (p=1.000)
+   - None of the network metrics significantly predict player performance
+   - Players above 2000 rating show significantly higher win rates (0.714) (cheating? 🤔🤨)
+   - Mid-level players (1200-1400) show higher clustering (0.227)
+
+2. **Opening Analysis**
+   - Top White Opening: Vienna Game: Mengarini Variation (82.4% win rate)
+   - Top Black Opening: Queen's Pawn Game: Chigorin Variation (75.9% win rate)
+   - 5 distinct player communities identified with clear opening preferences
+   - Most common transitions are self-transitions (B00 → B00, A04 → A04)
+
+3. **Rating Progression**
+   - Very weak but statistically significant correlation between rating difference and rating change: 0.124 (p < 1e-35)
+   - This suggests a systematic but minimal relationship between rating differences and rating changes
+   - The extremely small p-value indicates the relationship is consistent across the dataset
 
 ## Data
-This project uses chess game data from Lichess.org. [You can download the dataset from Kaggle](https://www.kaggle.com/datasets/datasnaek/chess) or use your own PGN files. 
+
+This project uses chess game data from Lichess.org. [You can download the dataset from Kaggle](https://www.kaggle.com/datasets/datasnaek/chess) or use your own PGN files.

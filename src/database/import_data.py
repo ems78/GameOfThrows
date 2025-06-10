@@ -2,9 +2,8 @@ import pandas as pd
 import kagglehub
 from .db_manager import Neo4jConnection
 from .models import GraphModels
-from ..blunder_detection.blunder_detection import BlunderDetection
 import datetime
-import uuid
+# import uuid
 import sys
 
 def download_chess_dataset():
@@ -38,7 +37,6 @@ def import_data_to_neo4j(batch_size=1000, max_games=None):
     print("Initializing database connection and models...")
     db = Neo4jConnection()
     models = GraphModels()
-    blunder_detection = BlunderDetection()
     
     try:
         # Download and load data
@@ -60,7 +58,6 @@ def import_data_to_neo4j(batch_size=1000, max_games=None):
             print("Importing games: ", end="", flush=True)
             
             games_processed = 0
-            blunders_found = 0
             
             for _, game in batch.iterrows():
                 game_id = game['id']
@@ -70,26 +67,21 @@ def import_data_to_neo4j(batch_size=1000, max_games=None):
                     print(".", end="", flush=True)
                     continue
 
-                date = pd.to_datetime(game['created_at']/1000, unit='s', origin='unix')
-                time_control = game['increment_code']
-                result = f"{game['winner']} won by {game['victory_status']}" if game['winner'] != '' else "draw"
-                eco_code = game['opening_eco']
-                pgn = game['moves']
-                blunder_data = blunder_detection.analyze_game_for_blunders(pgn)
-
-                # If None, stop import
-                if blunder_data is None:
-                    print("\nError analyzing game", game_id)
-                    break
+                # Store timestamps as Unix timestamps (milliseconds)
+                created_at = int(game['created_at'])
+                last_move_at = int(game['last_move_at'])
 
                 # Create game
                 models.create_game(
                     id=game_id,
-                    date=date,
-                    time_control=time_control,
-                    result=result,
-                    pgn=pgn,
-                    eco_code=eco_code
+                    rated=game['rated'],
+                    created_at=created_at,
+                    last_move_at=last_move_at,
+                    turns=game['turns'],
+                    victory_status=game['victory_status'],
+                    winner=game['winner'],
+                    increment_code=game['increment_code'],
+                    moves=game['moves']
                 )
                 
                 # Create opening
@@ -105,74 +97,34 @@ def import_data_to_neo4j(batch_size=1000, max_games=None):
                     opening_eco=game['opening_eco']
                 )
                 
-                # Create players
-                white_player_id = game['white_id']
-                black_player_id = game['black_id']
-                
                 models.create_player(
-                    id=white_player_id, 
-                    username=white_player_id,  # player id is username
+                    id=game['white_id'], 
+                    username=game['white_id'],  # player id is username
                     rating=game['white_rating']
                 )
                 
                 models.create_player(
-                    id=black_player_id,
-                    username=black_player_id,  # player id is username
+                    id=game['black_id'],
+                    username=game['black_id'],  # player id is username
                     rating=game['black_rating']
                 )
                 
                 # Connect players to game
                 models.connect_player_to_game(
-                    player_id=white_player_id,
+                    player_id=game['white_id'],
                     game_id=game_id,
                     color="white",
                     rating_at_game=game['white_rating']
                 )
                 
                 models.connect_player_to_game(
-                    player_id=black_player_id,
+                    player_id=game['black_id'],
                     game_id=game_id,
                     color="black",
                     rating_at_game=game['black_rating']
                 )
-
-                game_blunders = 0
-                for blunder in blunder_data:
-                    if blunder['move_class'] == 'Blunder':
-                        game_blunders += 1
-                        blunder_id = str(uuid.uuid4()) # Convert UUID to string for Neo4j
-                        
-                        # Create blunder
-                        models.create_blunder(
-                            id=blunder_id,
-                            move_number=blunder['move_number'],
-                            move_notation=blunder['move_notation'],
-                            best_move=blunder['bestmove'],
-                            position_fen=blunder['fen'],
-                            eval=blunder['eval'],
-                            eval_change=blunder['eval_change'],
-                            is_mate=blunder['is_mate'],
-                            severity='high' if abs(blunder['eval_change']) > 2 or blunder['is_mate'] 
-                                            else 'medium' if abs(blunder['eval_change']) > 1 
-                                            else 'low'
-                        )
-                        
-                        # Connect blunder to game
-                        models.connect_blunder_to_game(
-                            blunder_id=blunder_id,
-                            game_id=game_id
-                        )
-                        
-                        # Connect player to blunder
-                        player_id = white_player_id if blunder['player'] == 'White' else black_player_id
-                        models.connect_player_to_blunder(
-                            player_id=player_id,
-                            blunder_id=blunder_id,
-                            timestamp=date
-                        )
                 
                 games_processed += 1
-                blunders_found += game_blunders
                 print(".", end="", flush=True)
                 
                 # Print a newline every 50 games for better readability
@@ -180,8 +132,6 @@ def import_data_to_neo4j(batch_size=1000, max_games=None):
                     print()
                     print(f"  {games_processed}/{len(batch)} games processed", end="", flush=True)
             
-            print(f"\nBatch {batch_num} complete: {games_processed} games processed, {blunders_found} blunders found")
+            print(f"\nBatch {batch_num} complete: {games_processed} games processed")
     finally:
-        blunder_detection.close()
         db.close()
-
